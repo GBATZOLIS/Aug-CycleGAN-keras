@@ -5,12 +5,17 @@ Created on Sat Feb 29 18:04:27 2020
 @author: Georgios
 """
 
-from keras.layers import ZeroPadding2D, Conv2D, Add, LeakyReLU, Activation, Dense, Lambda, BatchNormalization, Conv2DTranspose
+from keras.layers import ZeroPadding2D, Conv2D, Add, LeakyReLU, Activation, Input,DepthwiseConv2D, Dense, Lambda, BatchNormalization, Conv2DTranspose
 from keras.initializers import RandomNormal
 from keras.layers import Layer
+from keras.models import Model
 from keras_custom_layers import AdaInstanceNormalization, InstanceNormalization
+from keras.engine.network import Network
 import tensorflow as tf
+from keras.optimizers import Adam
 
+import scipy.stats as st
+import numpy as np
 
 """General useful modules"""
 #-----------------------------------------------------------------------------------
@@ -187,7 +192,31 @@ def noise_domain_critic(noise, ndf=64):
     noise = Dense(units = 1)(noise)
     return noise
     
+
+def blur(img_shape):
+    def gauss_kernel(kernlen=21, nsig=3, channels=3):
+        interval = (2*nsig+1.)/(kernlen)
+        x = np.linspace(-nsig-interval/2., nsig+interval/2., kernlen+1)
+        kern1d = np.diff(st.norm.cdf(x))
+        kernel_raw = np.sqrt(np.outer(kern1d, kern1d))
+        kernel = kernel_raw/kernel_raw.sum()
+        out_filter = np.array(kernel, dtype = np.float32)
+        out_filter = out_filter.reshape((kernlen, kernlen, 1, 1))
+        out_filter = np.repeat(out_filter, channels, axis = 2)
+        return out_filter
     
+    kernel_size=21
+    blur_kernel_weights = gauss_kernel()
+    
+    image = Input(img_shape)
+    g_layer = DepthwiseConv2D(kernel_size, use_bias=False, padding='same')
+    image_processed = g_layer(image)
+    
+    g_layer.set_weights([blur_kernel_weights])
+    g_layer.trainable = False
+    model = Model(inputs = image, outputs = image_processed, name='blur')
+    model.compile(loss='mse',  optimizer=Adam(lr=0.0002, beta_1=0.5))
+    return model
     
     
     

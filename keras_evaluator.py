@@ -8,8 +8,8 @@ Created on Thu Mar  5 12:49:38 2020
 from data_loader import DataLoader
 import numpy as np
 import matplotlib.pyplot as plt
-from skimage.metrics import structural_similarity as ssim
-
+#from skimage.metrics import structural_similarity as ssim
+from skimage.measure import compare_ssim as ssim
 
 class evaluator(object):
     def __init__(self, img_shape, latent_shape):

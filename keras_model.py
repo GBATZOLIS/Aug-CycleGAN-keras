@@ -23,8 +23,8 @@ from data_loader import DataLoader
 from keras.optimizers import Adam
 from keras.models import Model
 from keras.layers import Input
-from keras.callbacks import ModelCheckpoint, TensorBoard
 
+from keras_modules import blur
 from keras_networks import G_AB, G_BA, E_A, E_B, D_A, D_B, D_Za, D_Zb
 from keras_evaluator import evaluator
 
@@ -55,6 +55,7 @@ class AugCycleGAN(object):
         self.D_B, self.D_B_static = D_B(img_shape)
         self.D_Za, self.D_Za_static = D_Za(latent_shape) 
         self.D_Zb, self.D_Zb_static = D_Zb(latent_shape)
+        self.blurring = blur(img_shape)
         
         #Compile the Discriminators
         self.D_A.compile(loss='mse',  optimizer=Adam(lr=0.0002, beta_1=0.5))
@@ -76,8 +77,9 @@ class AugCycleGAN(object):
         """
         
         self.cyclic = self.combined_cyclic()
-        self.cyclic.compile(loss=['mse', 'mse', 'mae', 'mae','mse', 'mse', 'mae', 'mae'], loss_weights=[1,1,1,1,1,1,1,1], optimizer=Adam(0.0002, 0.5))
-    
+        self.cyclic.compile(loss=['mse', 'mse', 'mae', 'mae', 'mae', 'mse', 'mse', 'mae', 'mae', 'mae'], loss_weights=[1,1,1,1,1,1,1,1,1,1], optimizer=Adam(0.0002, 0.5))
+        
+        print(self.blurring.summary())
     def combined_cyclic(self,):
         inputs=[]
         outputs=[]
@@ -91,6 +93,7 @@ class AugCycleGAN(object):
         
         #---------------------------------
         b_hat = self.G_AB([a, z_b])
+        b_hat_blurred = self.blurring(b_hat)
         valid_b_hat = self.D_B_static(b_hat)
         
         z_a_hat = self.E_A([a, b_hat])
@@ -101,7 +104,7 @@ class AugCycleGAN(object):
         z_b_cyc = self.E_B([a, b_hat])
         
         inputs.extend([a, z_b])
-        outputs.extend([valid_b_hat, valid_z_a_hat, a_cyc, z_b_cyc])
+        outputs.extend([valid_b_hat, valid_z_a_hat, a_cyc, b_hat_blurred, z_b_cyc])
 
         self.D_A_static.trainable=False
         self.D_Zb_static.trainable=False
@@ -111,6 +114,7 @@ class AugCycleGAN(object):
         
         #---------------------------------
         a_hat = self.G_BA([b, z_a])
+        a_hat_blurred = self.blurring(a_hat)
         valid_a_hat = self.D_A_static(a_hat)
         
         z_b_hat = self.E_B([a_hat, b])
@@ -121,54 +125,10 @@ class AugCycleGAN(object):
         z_a_cyc = self.E_A([a_hat, b])
         
         inputs.extend([b, z_a])
-        outputs.extend([valid_a_hat, valid_z_b_hat, b_cyc, z_a_cyc])
+        outputs.extend([valid_a_hat, valid_z_b_hat, b_cyc, a_hat_blurred, z_a_cyc])
         
         
         model = Model(inputs = inputs, outputs = outputs, name='combined_cyclic')
-        return model
-        
-    
-    def combined_cyclic_A(self, ):
-        self.D_B_static.trainable=False
-        self.D_Za_static.trainable=False
-        
-        a=Input(self.img_shape)
-        z_b=Input(self.latent_shape)
-        
-        #---------------------------------
-        b_hat = self.G_AB([a, z_b])
-        valid_b_hat = self.D_B_static(b_hat)
-        
-        z_a_hat = self.E_A([a, b_hat])
-        valid_z_a_hat = self.D_Za_static(z_a_hat)
-        #---------------------------------
-        
-        a_cyc = self.G_BA([b_hat, z_a_hat])
-        z_b_cyc = self.E_B([a, b_hat])
-        
-        model = Model(inputs=[a, z_b], outputs=[valid_b_hat, valid_z_a_hat, a_cyc, z_b_cyc], name='combined_cyclic_A')
-        return model
-    
-    def combined_cyclic_B(self,):
-        self.D_A_static.trainable=False
-        self.D_Zb_static.trainable=False
-        
-        b=Input(self.img_shape)
-        z_a = Input(self.latent_shape)
-        
-        #---------------------------------
-        a_hat = self.G_BA([b, z_a])
-        valid_a_hat = self.D_A_static(a_hat)
-        
-        z_b_hat = self.E_B([a_hat, b])
-        valid_z_b_hat = self.D_Zb_static(z_b_hat)
-        #---------------------------------
-        
-        b_cyc = self.G_AB([a_hat, z_b_hat])
-        z_a_cyc = self.E_A([a_hat, b])
-        
-        model = Model(inputs = [b, z_a], outputs = [valid_a_hat, valid_z_b_hat, b_cyc, z_a_cyc], name='combined_cyclic_B')
-        
         return model
     
     def generate_fake_samples(self, img_A, img_B, z_a, z_b):
@@ -229,23 +189,30 @@ class AugCycleGAN(object):
                 #c_cyclic_A_loss = self.c_cyclic_A.train_on_batch([img_A, z_b],[valid_D_B, valid_D_Za, img_A, z_b])
                 #c_cyclic_B_loss = self.c_cyclic_B.train_on_batch([img_B, z_a], [valid_D_A, valid_D_Zb, img_B, z_a])
                 
-                cc_loss = self.cyclic.train_on_batch([img_A, z_b, img_B, z_a],[valid_D_B, valid_D_Za, img_A, z_b, valid_D_A, valid_D_Zb, img_B, z_a])
+                #blur the imgA and imgB for appropriate blur supervision
+                #we want to incite the mapping function to keep the low-frequencies unchanged!
+                blur_img_A = self.blurring.predict(img_A)
+                blur_img_B = self.blurring.predict(img_B)
+                cc_loss = self.cyclic.train_on_batch([img_A, z_b, img_B, z_a],
+                                                     [valid_D_B, valid_D_Za, img_A, blur_img_A, z_b, valid_D_A, valid_D_Zb, img_B, blur_img_B, z_a])
                 
                 #Calculate losses
                 D_A_loss_mean = (D_A_loss_real + D_A_loss_fake)/2
                 D_B_loss_mean = (D_B_loss_real + D_B_loss_fake)/2
                 D_Za_loss_mean = (D_Za_loss_real + D_Za_loss_fake)/2
                 D_Zb_loss_mean = (D_Zb_loss_real + D_Zb_loss_fake)/2
-                Adv_Img = (cc_loss[1]+cc_loss[5])/2 
-                Adv_Noise = (cc_loss[2]+cc_loss[6])/2
-                RecImg = (cc_loss[3]+cc_loss[7])/2
-                RecN = (cc_loss[4]+cc_loss[8])/2
+                Adv_Img = (cc_loss[1]+cc_loss[6])/2 
+                Adv_Noise = (cc_loss[2]+cc_loss[7])/2
+                RecImg = (cc_loss[3]+cc_loss[8])/2
+                Blur_loss = (cc_loss[4]+cc_loss[9])/2
+                RecN = (cc_loss[5]+cc_loss[10])/2
+                
                 
                 elapsed_time = datetime.datetime.now() - start_time
                 elapsed_time = chop_microseconds(elapsed_time)
-                print('[%d/%d][%d/%d]--[D_A:%.3f - D_B:%.3f - D_Za:%.3f - D_Zb:%.3f ]--[Adv_Img:%.3f - Adv_Noise:%.3f - RecImg:%.3f - RecN:%.3f]--[elapsed time:%s]' 
+                print('[%d/%d][%d/%d]--[D_A:%.3f - D_B:%.3f - D_Za:%.3f - D_Zb:%.3f ]--[Adv_Img:%.3f - Adv_Noise:%.3f - RecImg:%.3f - Blur:%.3f - RecN:%.3f]--[elapsed time:%s]' 
                       % (epoch, epochs, batch, self.data_loader.n_batches, D_A_loss_mean, D_B_loss_mean, D_Za_loss_mean, D_Zb_loss_mean,
-                         Adv_Img, Adv_Noise, RecImg, RecN, elapsed_time))
+                         Adv_Img, Adv_Noise, RecImg, Blur_loss, RecN, elapsed_time))
                 
                 if batch % 50 == 0 and not(batch==0 and epoch==0):
                     self.eval_training_points.append(training_point)
