@@ -7,12 +7,11 @@ Created on Sat Feb 29 18:04:27 2020
 
 from keras.layers import ZeroPadding2D, Conv2D, Add, LeakyReLU, Activation, Input,DepthwiseConv2D, Dense, Lambda, BatchNormalization, Conv2DTranspose
 from keras.initializers import RandomNormal
-from keras.layers import Layer
 from keras.models import Model
 from keras_custom_layers import AdaInstanceNormalization, InstanceNormalization
-from keras.engine.network import Network
 import tensorflow as tf
 from keras.optimizers import Adam
+from keras.activations import relu, sigmoid
 
 import scipy.stats as st
 import numpy as np
@@ -217,8 +216,15 @@ def blur(img_shape):
     model = Model(inputs = image, outputs = image_processed, name='blur')
     model.compile(loss='mse',  optimizer=Adam(lr=0.0002, beta_1=0.5))
     return model
+
+def latent_mapping_network(x):
+    for i in range(4):
+        x = Dense(16, activation='relu')(x)
     
+    x = Dense(16, activation='sigmoid')(x)
+    return x
     
+
     
 
 

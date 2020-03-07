@@ -5,9 +5,9 @@ Created on Sat Feb 29 17:56:58 2020
 @author: Georgios
 """
 
-from keras.layers import Input, Concatenate, Reshape
+from keras.layers import Input, Concatenate, Reshape, Dense
 from keras.models import Model
-from keras_modules import CINResnetGenerator, LatentEncoder, img_domain_critic, noise_domain_critic
+from keras_modules import CINResnetGenerator, LatentEncoder, img_domain_critic, noise_domain_critic, latent_mapping_network
 from keras.engine.network import Network
 
 
@@ -65,27 +65,40 @@ def D_B(img_shape):
     
     return model, static_model
 
-def D_Za(latent_shape):
+def D_Za(latent_shape, name):
     
     Za = Input(latent_shape)
     reshaped_Za = Reshape((latent_shape[-1],))(Za)
     result = noise_domain_critic(reshaped_Za)
     
-    model = Model(inputs=Za, outputs=result, name='DZa')
-    static_model = Network(inputs=Za, outputs=result, name='DZa_static')
+    model = Model(inputs=Za, outputs=result, name=name)
+    static_model = Network(inputs=Za, outputs=result, name=name+'_static')
     
     return model, static_model
 
-def D_Zb(latent_shape):
+def D_Zb(latent_shape, name):
     
     Zb = Input(latent_shape)
     reshaped_Zb = Reshape((latent_shape[-1],))(Zb)
     result = noise_domain_critic(reshaped_Zb)
     
-    model = Model(inputs=Zb, outputs=result, name='DZb')
-    static_model = Network(inputs=Zb, outputs=result, name='DZb_static')
+    model = Model(inputs=Zb, outputs=result, name=name)
+    static_model = Network(inputs=Zb, outputs=result, name=name+'_static')
     
     return model, static_model
 
+def latent_map(latent_shape, name):
+    #This network maps initial latent distribution (e.g. Normal) to final latent distribution
+    #it is a simple concatentation of dense layers
+    
+    z = Input(latent_shape)
+    reshaped_z = Reshape((latent_shape[-1],))(z)
+    out = latent_mapping_network(reshaped_z)
+    reshaped_out = Reshape(latent_shape)(out)
+    
+    model = Model(inputs=z, outputs=reshaped_out, name=name)
+    
+    return model
+    
 
     
