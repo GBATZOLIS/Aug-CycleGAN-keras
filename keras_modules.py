@@ -65,7 +65,6 @@ def CINResnetBlock(image, noise, x_dim, z_dim):
     
     out_image = conv_block(image, noise, x_dim, z_dim)
     out_image = Add()([out_image, image])
-    #out_image = out_image + image
     out_image = LeakyReLU(alpha=0.2)(out_image)
     
     return out_image
@@ -77,15 +76,15 @@ def CINResnetGenerator(image, noise, ngf, nlatent):
     init = RandomNormal(stddev=0.02)
     
     image = Conv2D(filters = ngf, kernel_size=7, padding='same', kernel_initializer = init)(image)
-    image = CondInstanceNorm(image, noise, x_dim = ngf, z_dim = nlatent)
+    #image = CondInstanceNorm(image, noise, x_dim = ngf, z_dim = nlatent)
     image = LeakyReLU(alpha=0.2)(image)
     
     image = Conv2D(filters = 2*ngf, kernel_size=3, padding='same', kernel_initializer = init)(image)
-    image = CondInstanceNorm(image, noise, x_dim = 2*ngf, z_dim = nlatent)
+    #image = CondInstanceNorm(image, noise, x_dim = 2*ngf, z_dim = nlatent)
     image = LeakyReLU(alpha=0.2)(image)
     
     image = Conv2D(filters = 4*ngf, kernel_size=3, strides=2, padding='same', kernel_initializer = init)(image)
-    image = CondInstanceNorm(image, noise, x_dim = 4*ngf, z_dim = nlatent)
+    #image = CondInstanceNorm(image, noise, x_dim = 4*ngf, z_dim = nlatent)
     image = LeakyReLU(alpha=0.2)(image)
     
     for i in range(3):
