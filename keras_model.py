@@ -55,7 +55,7 @@ class AugCycleGAN(object):
         self.D_B, self.D_B_static = D_B(img_shape)
         self.D_Za, self.D_Za_static = D_Za(latent_shape) 
         self.D_Zb, self.D_Zb_static = D_Zb(latent_shape)
-        #self.blurring = blur(img_shape)
+        self.blurring = blur(img_shape)
         
         #Compile the Discriminators
         self.D_A.compile(loss='mse',  optimizer=Adam(lr=0.0002, beta_1=0.5))
@@ -77,7 +77,7 @@ class AugCycleGAN(object):
         """
         
         self.cyclic = self.combined_cyclic()
-        self.cyclic.compile(loss=['mse', 'mse', 'mae', 'mae', 'mse', 'mse', 'mae', 'mae'], loss_weights=[1,1,1,1,1,1,1,1], optimizer=Adam(0.0002, 0.5))
+        self.cyclic.compile(loss=['mse', 'mse', 'mae', 'mae', 'mae', 'mse', 'mse', 'mae', 'mae', 'mae'], loss_weights=[1,1,1,1,1,1,1,1,1,1], optimizer=Adam(0.0002, 0.5))
         
         self.sup_cyclic = self.supervised_cycle()
         self.sup_cyclic.compile(loss=['mae', 'mae'], loss_weights=[1,1], optimizer=Adam(0.0002, 0.5))
@@ -95,6 +95,7 @@ class AugCycleGAN(object):
         
         #---------------------------------
         b_hat = self.G_AB([a, z_b])
+        b_hat_blurred = self.blurring(b_hat)
         valid_b_hat = self.D_B_static(b_hat)
         
         z_a_hat = self.E_A([a, b_hat])
@@ -105,7 +106,7 @@ class AugCycleGAN(object):
         z_b_cyc = self.E_B([a, b_hat])
         
         inputs.extend([a, z_b])
-        outputs.extend([valid_b_hat, valid_z_a_hat, a_cyc, z_b_cyc])
+        outputs.extend([valid_b_hat, valid_z_a_hat, a_cyc, b_hat_blurred, z_b_cyc])
 
         self.D_A_static.trainable=False
         self.D_Zb_static.trainable=False
@@ -115,6 +116,7 @@ class AugCycleGAN(object):
         
         #---------------------------------
         a_hat = self.G_BA([b, z_a])
+        a_hat_blurred = self.blurring(a_hat)
         valid_a_hat = self.D_A_static(a_hat)
         
         z_b_hat = self.E_B([a_hat, b])
@@ -125,7 +127,7 @@ class AugCycleGAN(object):
         z_a_cyc = self.E_A([a_hat, b])
         
         inputs.extend([b, z_a])
-        outputs.extend([valid_a_hat, valid_z_b_hat, b_cyc, z_a_cyc])
+        outputs.extend([valid_a_hat, valid_z_b_hat, b_cyc, a_hat_blurred, z_a_cyc])
         
         
         model = Model(inputs = inputs, outputs = outputs, name='combined_cyclic')
@@ -177,6 +179,11 @@ class AugCycleGAN(object):
             for batch, (img_A, img_B, sup_img_A, sup_img_B) in enumerate(self.data_loader.load_batch(batch_size)):
                 training_point = np.around(epoch+batch/self.data_loader.n_batches, 3)
                 
+                #blur the imgA and imgB for appropriate blur supervision
+                #we want to incite the mapping function to keep the low-frequencies unchanged!
+                blur_img_A = self.blurring.predict(img_A)
+                blur_img_B = self.blurring.predict(img_B)
+                
                 for noise_batch in range(2):
                     #generate the noise vectors from the N(0,sigma^2) distribution
                     z_a = np.random.randn(batch_size, 1, 1, self.latent_shape[-1])
@@ -200,27 +207,27 @@ class AugCycleGAN(object):
     
                     
                     cc_loss = self.cyclic.train_on_batch([img_A, z_b, img_B, z_a],
-                                                         [valid_D_B, valid_D_Za, img_A, z_b, valid_D_A, valid_D_Zb, img_B, z_a])
+                                                         [valid_D_B, valid_D_Za, img_A, blur_img_A, z_b, valid_D_A, valid_D_Zb, img_B, blur_img_B, z_a])
                     
                     #Calculate losses
                     D_A_loss_mean = (D_A_loss_real + D_A_loss_fake)/2
                     D_B_loss_mean = (D_B_loss_real + D_B_loss_fake)/2
                     D_Za_loss_mean = (D_Za_loss_real + D_Za_loss_fake)/2
                     D_Zb_loss_mean = (D_Zb_loss_real + D_Zb_loss_fake)/2
-                    Adv_Img = (cc_loss[1]+cc_loss[5])/2 
-                    Adv_Noise = (cc_loss[2]+cc_loss[6])/2
-                    RecImg = (cc_loss[3]+cc_loss[7])/2
-                    RecN = (cc_loss[4]+cc_loss[8])/2
-                    
+                    Adv_Img = (cc_loss[1]+cc_loss[6])/2 
+                    Adv_Noise = (cc_loss[2]+cc_loss[7])/2
+                    RecImg = (cc_loss[3]+cc_loss[8])/2
+                    Blur_loss = (cc_loss[4]+cc_loss[9])/2
+                    RecN = (cc_loss[5]+cc_loss[10])/2
                     
                     elapsed_time = datetime.datetime.now() - start_time
                     elapsed_time = chop_microseconds(elapsed_time)
-                    print('[epochs:%d/%d][img_batches:%d/%d][noise_batches:%d/10]--[D_A:%.3f - D_B:%.3f - D_Za:%.3f - D_Zb:%.3f ]--[Adv_Img:%.3f - Adv_Noise:%.3f - RecImg:%.3f - RecN:%.3f]--[elapsed time:%s]' 
+                    print('[epoch:%d/%d][img_batch:%d/%d][N_batch:%d/10]--[D_A:%.3f - D_B:%.3f - D_Za:%.3f - D_Zb:%.3f ]--[Adv_Img:%.3f - Adv_N:%.3f - RecImg:%.3f - BlurImg:%.3f - RecN:%.3f]--[elapsed time:%s]' 
                           % (epoch, epochs, batch, self.data_loader.n_batches,noise_batch+1, D_A_loss_mean, D_B_loss_mean, D_Za_loss_mean, D_Zb_loss_mean,
-                             Adv_Img, Adv_Noise, RecImg, RecN, elapsed_time))
+                             Adv_Img, Adv_Noise, RecImg, Blur_loss, RecN, elapsed_time))
                 
                 sup_loss = self.sup_cyclic.train_on_batch([sup_img_A, sup_img_B],[sup_img_A, sup_img_B])
-                print('[epochs:%d/%d][img_batches:%d/%d][------------------] [supA:%.3f - supB:%.3f]'%(epoch, epochs, batch, self.data_loader.n_batches, sup_loss[1], sup_loss[2]))
+                print('[epoch:%d/%d][img_batch:%d/%d][--------------] [supA:%.3f - supB:%.3f]'%(epoch, epochs, batch, self.data_loader.n_batches, sup_loss[1], sup_loss[2]))
                 
                 if batch % 50 == 0 and not(batch==0 and epoch==0):
                     self.eval_training_points.append(training_point)
