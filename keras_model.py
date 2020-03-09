@@ -219,7 +219,8 @@ class AugCycleGAN(object):
                           % (epoch, epochs, batch, self.data_loader.n_batches,noise_batch+1, D_A_loss_mean, D_B_loss_mean, D_Za_loss_mean, D_Zb_loss_mean,
                              Adv_Img, Adv_Noise, RecImg, RecN, elapsed_time))
                 
-                self.sup_cyclic.train_on_batch([sup_img_A, sup_img_B],[sup_img_A, sup_img_B])
+                sup_loss = self.sup_cyclic.train_on_batch([sup_img_A, sup_img_B],[sup_img_A, sup_img_B])
+                print('[epochs:%d/%d][img_batches:%d/%d][------------------] [supA:%.3f - supB:%.3f]'%(epoch, epochs, batch, self.data_loader.n_batches, sup_loss[1], sup_loss[2]))
                 
                 if batch % 50 == 0 and not(batch==0 and epoch==0):
                     self.eval_training_points.append(training_point)
