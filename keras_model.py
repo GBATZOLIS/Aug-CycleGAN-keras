@@ -77,8 +77,11 @@ class AugCycleGAN(object):
         """
         
         self.cyclic = self.combined_cyclic()
-        self.cyclic.compile(loss=['mse', 'mse', 'mae', 'mae', 'mse', 'mse', 'mae', 'mae'], loss_weights=[1,1,1,0.25,1,1,1,0.25], optimizer=Adam(0.0002, 0.5))
-    
+        self.cyclic.compile(loss=['mse', 'mse', 'mae', 'mae', 'mse', 'mse', 'mae', 'mae'], loss_weights=[1,1,1,1,1,1,1,1], optimizer=Adam(0.0002, 0.5))
+        
+        self.sup_cyclic = self.supervised_cycle()
+        self.sup_cyclic.compile(loss=['mae', 'mae'], loss_weights=[1,1], optimizer=Adam(0.0002, 0.5))
+        
     def combined_cyclic(self,):
         inputs=[]
         outputs=[]
@@ -128,6 +131,20 @@ class AugCycleGAN(object):
         model = Model(inputs = inputs, outputs = outputs, name='combined_cyclic')
         return model
     
+    def supervised_cycle(self,):
+        a=Input(self.img_shape)
+        b=Input(self.img_shape)
+        
+        z_a_hat = self.E_A([a,b])
+        a_hat = self.G_BA([b,z_a_hat])
+        
+        z_b_hat = self.E_B([a,b])
+        b_hat = self.G_AB([a, z_b_hat])
+        
+        model = Model(inputs=[a,b], outputs=[a_hat, b_hat], name='Supervised Cyclic model')
+        return model
+            
+        
     def generate_fake_samples(self, img_A, img_B, z_a, z_b):
         b_hat = self.G_AB.predict([img_A, z_b])
         z_a_hat = self.E_A.predict([img_A, b_hat])
@@ -157,10 +174,10 @@ class AugCycleGAN(object):
         #create a dynamic evaluator object
         dynamic_evaluator = evaluator(self.img_shape, self.latent_shape)
         for epoch in range(epochs):
-            for batch, (img_A, img_B) in enumerate(self.data_loader.load_batch(batch_size)):
+            for batch, (img_A, img_B, sup_img_A, sup_img_B) in enumerate(self.data_loader.load_batch(batch_size)):
                 training_point = np.around(epoch+batch/self.data_loader.n_batches, 3)
                 
-                for noise_batch in range(10):
+                for noise_batch in range(2):
                     #generate the noise vectors from the N(0,sigma^2) distribution
                     z_a = np.random.randn(batch_size, 1, 1, self.latent_shape[-1])
                     z_b = np.random.randn(batch_size, 1, 1, self.latent_shape[-1])
@@ -201,6 +218,8 @@ class AugCycleGAN(object):
                     print('[epochs:%d/%d][img_batches:%d/%d][noise_batches:%d/10]--[D_A:%.3f - D_B:%.3f - D_Za:%.3f - D_Zb:%.3f ]--[Adv_Img:%.3f - Adv_Noise:%.3f - RecImg:%.3f - RecN:%.3f]--[elapsed time:%s]' 
                           % (epoch, epochs, batch, self.data_loader.n_batches,noise_batch+1, D_A_loss_mean, D_B_loss_mean, D_Za_loss_mean, D_Zb_loss_mean,
                              Adv_Img, Adv_Noise, RecImg, RecN, elapsed_time))
+                
+                self.sup_cyclic.train_on_batch([sup_img_A, sup_img_B],[sup_img_A, sup_img_B])
                 
                 if batch % 50 == 0 and not(batch==0 and epoch==0):
                     self.eval_training_points.append(training_point)
