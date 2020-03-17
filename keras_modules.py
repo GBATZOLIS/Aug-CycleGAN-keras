@@ -5,7 +5,7 @@ Created on Sat Feb 29 18:04:27 2020
 @author: Georgios
 """
 
-from keras.layers import ZeroPadding2D, Conv2D, Add, LeakyReLU, Activation, Input,DepthwiseConv2D, Dense, Lambda, BatchNormalization, Conv2DTranspose
+from keras.layers import ZeroPadding2D, Reshape, Conv2D, Add, LeakyReLU, Activation, Input,DepthwiseConv2D, Dense, Lambda, BatchNormalization, Conv2DTranspose
 from keras.initializers import RandomNormal
 from keras.layers import Layer
 from keras.models import Model
@@ -38,6 +38,11 @@ class ReflectionPadding2D(ZeroPadding2D):
             
 def CondInstanceNorm(image, noise, x_dim, z_dim):
     init = RandomNormal(stddev=0.02)
+    
+    noise = Reshape((z_dim,))(noise)
+    noise = Dense(z_dim, kernel_initializer = init)(noise)
+    noise = Dense(z_dim, kernel_initializer = init)(noise)
+    noise = Reshape((1,1,z_dim))(noise)
     
     shift_conv = Conv2D(filters = x_dim, kernel_size=1, padding='same', kernel_initializer = init)(noise)
     shift_conv = LeakyReLU(alpha=0.2)(shift_conv)
@@ -139,11 +144,13 @@ def LatentEncoder(concat_A_B, nef, z_dim):
     concat_A_B = BatchNormalization(axis=-1)(concat_A_B)
     concat_A_B = LeakyReLU(alpha=0.2)(concat_A_B)
     
+    """
     concat_A_B = Conv2D(filters=8*nef, kernel_size=3, strides=1, padding='same', kernel_initializer = init)(concat_A_B)
     concat_A_B = BatchNormalization(axis=-1)(concat_A_B)
     concat_A_B = LeakyReLU(alpha=0.2)(concat_A_B)
+    """
 
-    encoding = Conv2D(filters=z_dim[-1], kernel_size=1, strides=1, padding='valid', kernel_initializer = init)(concat_A_B)
+    encoding = Conv2D(filters=z_dim, kernel_size=1, strides=1, padding='valid', kernel_initializer = init)(concat_A_B)
     
     return encoding
 

@@ -184,17 +184,19 @@ class AugCycleGAN(object):
                 blur_img_A = self.blurring.predict(img_A)
                 blur_img_B = self.blurring.predict(img_B)
                 
+                #Update the Discriminators with the samples from the real marginals
+                D_A_loss_real = self.D_A.train_on_batch(img_A, valid_D_A)
+                D_B_loss_real = self.D_B.train_on_batch(img_B, valid_D_B)
+                
+                    
                 for noise_batch in range(2):
                     #generate the noise vectors from the N(0,sigma^2) distribution
                     z_a = np.random.randn(batch_size, 1, 1, self.latent_shape[-1])
                     z_b = np.random.randn(batch_size, 1, 1, self.latent_shape[-1])
-                    
-                    #Update the Discriminators with the samples from the real marginals
-                    D_A_loss_real = self.D_A.train_on_batch(img_A, valid_D_A)
-                    D_B_loss_real = self.D_B.train_on_batch(img_B, valid_D_B)
+
                     D_Za_loss_real = self.D_Za.train_on_batch(z_a, valid_D_Za)
                     D_Zb_loss_real = self.D_Zb.train_on_batch(z_b, valid_D_Zb)
-                    
+                
                     #Make the appropriate translations for training of the Discriminators on the fake samples
                     img_A_fake, img_B_fake, z_a_fake, z_b_fake = self.generate_fake_samples(img_A, img_B, z_a, z_b)
                     
@@ -247,8 +249,12 @@ class AugCycleGAN(object):
                     plt.plot(self.eval_training_points, self.avg_max_ssim, label='Avg Max SSIM')
                     plt.legend()
                     plt.savefig('progress/distortion/distortion_performance.png', bbox_inches='tight')
-
-model = AugCycleGAN((100,100,3), (1,1,16))
+                    
+                    #save the generators
+                    self.G_AB.save("models/G_AB_{}_{}.h5".format(epoch, batch))
+                    self.G_BA.save("models/G_BA_{}_{}.h5".format(epoch, batch))
+                    
+model = AugCycleGAN((100,100,3), (1,1,4))
 model.train(epochs=10, batch_size = 1)
 
     
