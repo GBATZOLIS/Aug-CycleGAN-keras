@@ -236,7 +236,7 @@ class AugCycleGAN(object):
                     #Perceptual Evaluation
                     dynamic_evaluator.test(batch_size=5, num_out_imgs=5, training_point=training_point, test_type='perception')
                     #Distortion Evaluation
-                    avg_ssim, avg_min_ssim, avg_max_ssim = dynamic_evaluator.test(batch_size=25, num_out_imgs=10, training_point=training_point, test_type='distortion')
+                    avg_ssim, avg_min_ssim, avg_max_ssim = dynamic_evaluator.test(batch_size=100, num_out_imgs=10, training_point=training_point, test_type='distortion')
                     self.avg_ssim.append(avg_ssim)
                     self.avg_min_ssim.append(avg_min_ssim)
                     self.avg_max_ssim.append(avg_max_ssim)
@@ -248,8 +248,8 @@ class AugCycleGAN(object):
                     plt.legend()
                     plt.savefig('progress/distortion/distortion_performance.png', bbox_inches='tight')
 
-model = AugCycleGAN((100,100,3), (1,1,16))
-model.train(epochs=10, batch_size = 1)
+model = AugCycleGAN((100,100,3), (1,1,4))
+model.train(epochs=100, batch_size = 20)
 
     
 

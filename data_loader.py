@@ -92,11 +92,11 @@ class DataLoader():
         sup_path_A = glob(r'data/%sA/*' % (data_type))
         sup_path_B = glob(r'data/%sB/*' % (data_type))
 
-        path_A=sup_path_A[0:10000]
-        path_B=sup_path_B[0:10000]
+        path_A=sup_path_A[0:15000]
+        path_B=sup_path_B[0:15000]
         
-        sup_path_A = sup_path_A[10000:20000]
-        sup_path_B = sup_path_B[10000:20000]
+        sup_path_A = sup_path_A[15000:30000]
+        sup_path_B = sup_path_B[15000:30000]
 
         self.n_batches = int(min(len(path_A), len(path_B)) / batch_size)
         total_samples = self.n_batches * batch_size
