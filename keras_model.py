@@ -232,6 +232,9 @@ class AugCycleGAN(object):
                 if batch % 50 == 0 and not(batch==0 and epoch==0):
                     self.eval_training_points.append(training_point)
                     
+                    #save the G_AB model
+                    self.G_AB.save('models/G_AB_%d_%d' % (epoch, batch))
+                    
                     dynamic_evaluator.model = self.G_AB
                     #Perceptual Evaluation
                     dynamic_evaluator.test(batch_size=5, num_out_imgs=5, training_point=training_point, test_type='perception')
@@ -249,7 +252,7 @@ class AugCycleGAN(object):
                     plt.savefig('progress/distortion/distortion_performance.png', bbox_inches='tight')
 
 model = AugCycleGAN((100,100,3), (1,1,4))
-model.train(epochs=100, batch_size = 20)
+model.train(epochs=100, batch_size = 1)
 
     
 
