@@ -233,7 +233,7 @@ class AugCycleGAN(object):
                     self.eval_training_points.append(training_point)
                     
                     #save the G_AB model
-                    self.G_AB.save('models/G_AB_%d_%d' % (epoch, batch))
+                    self.G_AB.save('models/G_AB_%d_%d.h5' % (epoch, batch))
                     
                     dynamic_evaluator.model = self.G_AB
                     #Perceptual Evaluation
