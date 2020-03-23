@@ -39,10 +39,10 @@ class ReflectionPadding2D(ZeroPadding2D):
 def CondInstanceNorm(image, noise, x_dim, z_dim):
     init = RandomNormal(stddev=0.02)
     
-    noise = Reshape((z_dim,))(noise)
-    noise = Dense(z_dim, kernel_initializer = init)(noise)
-    noise = Dense(z_dim, kernel_initializer = init)(noise)
-    noise = Reshape((1,1,z_dim))(noise)
+    #noise = Reshape((z_dim,))(noise)
+    #noise = Dense(z_dim, kernel_initializer = init)(noise)
+    #noise = Dense(z_dim, kernel_initializer = init)(noise)
+    #noise = Reshape((1,1,z_dim))(noise)
     
     shift_conv = Conv2D(filters = x_dim, kernel_size=1, padding='same', kernel_initializer = init)(noise)
     shift_conv = LeakyReLU(alpha=0.2)(shift_conv)
@@ -196,6 +196,24 @@ def noise_domain_critic(noise, ndf=64):
     noise = LeakyReLU(alpha=0.2)(noise)
     
     noise = Dense(units = 1)(noise)
+    return noise
+
+def noise_mapping_func(noise, nlatent):
+    init = RandomNormal(stddev=0.02)
+    
+    noise = Reshape((nlatent,))(noise)
+    
+    noise = Dense(units = nlatent, kernel_initializer=init)(noise)
+    noise = LeakyReLU(alpha=0.2)(noise)
+    noise = Dense(units = nlatent, kernel_initializer=init)(noise)
+    noise = LeakyReLU(alpha=0.2)(noise)
+    noise = Dense(units = nlatent, kernel_initializer=init)(noise)
+    noise = LeakyReLU(alpha=0.2)(noise)
+    noise = Dense(units = nlatent, kernel_initializer=init)(noise)
+    noise = LeakyReLU(alpha=0.2)(noise)
+    
+    noise = Reshape((1, 1, nlatent))(noise)
+    
     return noise
     
 

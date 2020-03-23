@@ -7,7 +7,7 @@ Created on Sat Feb 29 17:56:58 2020
 
 from keras.layers import Input, Concatenate, Reshape
 from keras.models import Model
-from keras_modules import CINResnetGenerator, LatentEncoder, img_domain_critic, noise_domain_critic
+from keras_modules import CINResnetGenerator, LatentEncoder, img_domain_critic, noise_domain_critic, noise_mapping_func
 from keras.engine.network import Network
 
 
@@ -87,6 +87,13 @@ def D_Zb(latent_shape):
     
     return model, static_model
 
+def N_map(latent_shape, domain):
+    n = Input(latent_shape)
+    w = noise_mapping_func(n, latent_shape[-1])
+    model = Model(inputs=n, outputs=w, name='NoiseMap_'+domain)
+    return model
 
+"""
 model=E_A(img_shape=(100,100,3),latent_shape=(1,1,4))
 print(model.summary())
+"""

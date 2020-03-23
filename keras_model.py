@@ -25,7 +25,7 @@ from keras.models import Model
 from keras.layers import Input
 
 from keras_modules import blur
-from keras_networks import G_AB, G_BA, E_A, E_B, D_A, D_B, D_Za, D_Zb
+from keras_networks import G_AB, G_BA, E_A, E_B, D_A, D_B, D_Za, D_Zb, N_map
 from keras_evaluator import evaluator
 
 #visualisation packages
@@ -56,6 +56,8 @@ class AugCycleGAN(object):
         self.D_Za, self.D_Za_static = D_Za(latent_shape) 
         self.D_Zb, self.D_Zb_static = D_Zb(latent_shape)
         self.blurring = blur(img_shape)
+        self.N_map_A = N_map(latent_shape, 'A')
+        self.N_map_B = N_map(latent_shape, 'B')
         
         #Compile the Discriminators
         self.D_A.compile(loss='mse',  optimizer=Adam(lr=0.0002, beta_1=0.5))
@@ -77,10 +79,10 @@ class AugCycleGAN(object):
         """
         
         self.cyclic = self.combined_cyclic()
-        self.cyclic.compile(loss=['mse', 'mse', 'mae', 'mae', 'mae', 'mse', 'mse', 'mae', 'mae', 'mae'], loss_weights=[1,1,1,1,1,1,1,1,1,1], optimizer=Adam(0.0002, 0.5))
+        self.cyclic.compile(loss=['mse', 'mse', 'mae', 'mae', 'mae', 'mse', 'mse', 'mae', 'mae', 'mae'], loss_weights=[1,1,1,2,1,1,1,1,2,1], optimizer=Adam(0.0002, 0.5))
         
         self.sup_cyclic = self.supervised_cycle()
-        self.sup_cyclic.compile(loss=['mae', 'mae'], loss_weights=[1,1], optimizer=Adam(0.0002, 0.5))
+        self.sup_cyclic.compile(loss=['mae', 'mae'], loss_weights=[2,2], optimizer=Adam(0.0002, 0.5))
         
     def combined_cyclic(self,):
         inputs=[]
@@ -93,20 +95,22 @@ class AugCycleGAN(object):
         a=Input(self.img_shape)
         z_b=Input(self.latent_shape)
         
+        w_b = self.N_map_B(z_b)
+        
         #---------------------------------
-        b_hat = self.G_AB([a, z_b])
+        b_hat = self.G_AB([a, w_b])
         b_hat_blurred = self.blurring(b_hat)
         valid_b_hat = self.D_B_static(b_hat)
         
-        z_a_hat = self.E_A([a, b_hat])
-        valid_z_a_hat = self.D_Za_static(z_a_hat)
+        w_a_hat = self.E_A([a, b_hat])
+        valid_w_a_hat = self.D_Za_static(w_a_hat)
         #---------------------------------
         
-        a_cyc = self.G_BA([b_hat, z_a_hat])
-        z_b_cyc = self.E_B([a, b_hat])
+        a_cyc = self.G_BA([b_hat, w_a_hat])
+        w_b_cyc = self.E_B([a, b_hat])
         
         inputs.extend([a, z_b])
-        outputs.extend([valid_b_hat, valid_z_a_hat, a_cyc, b_hat_blurred, z_b_cyc])
+        outputs.extend([valid_b_hat, valid_w_a_hat, a_cyc, b_hat_blurred, w_b_cyc])
 
         self.D_A_static.trainable=False
         self.D_Zb_static.trainable=False
@@ -114,20 +118,22 @@ class AugCycleGAN(object):
         b = Input(self.img_shape)
         z_a = Input(self.latent_shape)
         
+        w_a = self.N_map_A(z_a)
+        
         #---------------------------------
-        a_hat = self.G_BA([b, z_a])
+        a_hat = self.G_BA([b, w_a])
         a_hat_blurred = self.blurring(a_hat)
         valid_a_hat = self.D_A_static(a_hat)
         
-        z_b_hat = self.E_B([a_hat, b])
-        valid_z_b_hat = self.D_Zb_static(z_b_hat)
+        w_b_hat = self.E_B([a_hat, b])
+        valid_w_b_hat = self.D_Zb_static(w_b_hat)
         #---------------------------------
         
-        b_cyc = self.G_AB([a_hat, z_b_hat])
+        b_cyc = self.G_AB([a_hat, w_b_hat])
         z_a_cyc = self.E_A([a_hat, b])
         
         inputs.extend([b, z_a])
-        outputs.extend([valid_a_hat, valid_z_b_hat, b_cyc, a_hat_blurred, z_a_cyc])
+        outputs.extend([valid_a_hat, valid_w_b_hat, b_cyc, a_hat_blurred, z_a_cyc])
         
         
         model = Model(inputs = inputs, outputs = outputs, name='combined_cyclic')
@@ -137,24 +143,25 @@ class AugCycleGAN(object):
         a=Input(self.img_shape)
         b=Input(self.img_shape)
         
-        z_a_hat = self.E_A([a,b])
-        a_hat = self.G_BA([b,z_a_hat])
+        w_a_hat = self.E_A([a,b])
+        a_hat = self.G_BA([b,w_a_hat])
         
-        z_b_hat = self.E_B([a,b])
-        b_hat = self.G_AB([a, z_b_hat])
+        w_b_hat = self.E_B([a,b])
+        b_hat = self.G_AB([a, w_b_hat])
         
+        #I need to add a perceptual loss as well
         model = Model(inputs=[a,b], outputs=[a_hat, b_hat], name='Supervised Cyclic model')
         return model
             
         
-    def generate_fake_samples(self, img_A, img_B, z_a, z_b):
-        b_hat = self.G_AB.predict([img_A, z_b])
-        z_a_hat = self.E_A.predict([img_A, b_hat])
+    def generate_fake_samples(self, img_A, img_B, w_a, w_b):
+        b_hat = self.G_AB.predict([img_A, w_b])
+        w_a_hat = self.E_A.predict([img_A, b_hat])
         
-        a_hat = self.G_BA.predict([img_B, z_a])
-        z_b_hat = self.E_B.predict([a_hat, img_B])
+        a_hat = self.G_BA.predict([img_B, w_a])
+        w_b_hat = self.E_B.predict([a_hat, img_B])
         
-        return a_hat, b_hat, z_a_hat, z_b_hat
+        return a_hat, b_hat, w_a_hat, w_b_hat
     
         
     def train(self, epochs, batch_size=10, sample_interval=50):
@@ -189,16 +196,19 @@ class AugCycleGAN(object):
                 D_B_loss_real = self.D_B.train_on_batch(img_B, valid_D_B)
                 
                     
-                for noise_batch in range(2):
+                for noise_batch in range(4):
                     #generate the noise vectors from the N(0,sigma^2) distribution
                     z_a = np.random.randn(batch_size, 1, 1, self.latent_shape[-1])
                     z_b = np.random.randn(batch_size, 1, 1, self.latent_shape[-1])
-
-                    D_Za_loss_real = self.D_Za.train_on_batch(z_a, valid_D_Za)
-                    D_Zb_loss_real = self.D_Zb.train_on_batch(z_b, valid_D_Zb)
+                    
+                    w_a = self.N_map_A.predict(z_a) #map z space to w space
+                    w_b = self.N_map_A.predict(z_b)
+                    
+                    D_Za_loss_real = self.D_Za.train_on_batch(w_a, valid_D_Za)
+                    D_Zb_loss_real = self.D_Zb.train_on_batch(w_b, valid_D_Zb)
                 
                     #Make the appropriate translations for training of the Discriminators on the fake samples
-                    img_A_fake, img_B_fake, z_a_fake, z_b_fake = self.generate_fake_samples(img_A, img_B, z_a, z_b)
+                    img_A_fake, img_B_fake, z_a_fake, z_b_fake = self.generate_fake_samples(img_A, img_B, w_a, w_b)
                     
                     #Update the discriminators using the fake samples
                     D_A_loss_fake = self.D_A.train_on_batch(img_A_fake, fake_D_A)
@@ -209,7 +219,7 @@ class AugCycleGAN(object):
     
                     
                     cc_loss = self.cyclic.train_on_batch([img_A, z_b, img_B, z_a],
-                                                         [valid_D_B, valid_D_Za, img_A, blur_img_A, z_b, valid_D_A, valid_D_Zb, img_B, blur_img_B, z_a])
+                                                         [valid_D_B, valid_D_Za, img_A, blur_img_A, w_b, valid_D_A, valid_D_Zb, img_B, blur_img_B, w_a])
                     
                     #Calculate losses
                     D_A_loss_mean = (D_A_loss_real + D_A_loss_fake)/2
