@@ -251,7 +251,7 @@ class AugCycleGAN(object):
                     plt.legend()
                     plt.savefig('progress/distortion/distortion_performance.png', bbox_inches='tight')
 
-model = AugCycleGAN((100,100,3), (1,1,4))
+model = AugCycleGAN((100,100,3), (1,1,2))
 model.train(epochs=100, batch_size = 1)
 
     
