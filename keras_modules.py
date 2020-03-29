@@ -5,15 +5,19 @@ Created on Sat Feb 29 18:04:27 2020
 @author: Georgios
 """
 
-from keras.layers import ZeroPadding2D, Reshape, Conv2D, Add, LeakyReLU, Activation, Input,DepthwiseConv2D, Dense, Lambda, BatchNormalization, Conv2DTranspose
-from keras.initializers import RandomNormal
-from keras.layers import Layer
-from keras.models import Model
-from keras_custom_layers import AdaInstanceNormalization, InstanceNormalization
-from keras.engine.network import Network
-import tensorflow as tf
-from keras.optimizers import Adam
+from tensorflow.keras.layers import add, ZeroPadding2D, Reshape, Conv2D, Add, LeakyReLU, Activation, Input,DepthwiseConv2D, Dense, Lambda, BatchNormalization, Conv2DTranspose
+from tensorflow.keras.initializers import RandomNormal
+from tensorflow.keras.layers import Layer
+from tensorflow.keras.models import Model
+from tensorflow.python.keras.engine.network import Network
+from tensorflow.keras.optimizers import Adam
 
+
+from keras_custom_layers import AdaInstanceNormalization, InstanceNormalization
+
+import tensorflow as tf
+
+from conv_mod import *
 import scipy.stats as st
 import numpy as np
 
@@ -78,36 +82,37 @@ def CINResnetGenerator(image, noise, ngf, nlatent):
     #ngf: number of generator filters
     #nlatent: the dimensionality of the latent space
     
-    init = RandomNormal(stddev=0.02)
     
-    image = Conv2D(filters = ngf, kernel_size=7, padding='same', kernel_initializer = init)(image)
-    image = CondInstanceNorm(image, noise, x_dim = ngf, z_dim = nlatent)
-    image = LeakyReLU(alpha=0.2)(image)
+    def g_block(inp, istyle, filters):
+        init = RandomNormal(stddev=0.02)
+        
+        rgb_style = Dense(filters, kernel_initializer = init)(istyle)
+        
+        style1 = Dense(inp.shape[-1], kernel_initializer = init)(istyle)
+        out = Conv2DMod(filters = filters, kernel_size = 3, padding = 'same', kernel_initializer = init)([inp, style1])
+        out = LeakyReLU(0.2)(out)
     
-    image = Conv2D(filters = 2*ngf, kernel_size=3, padding='same', kernel_initializer = init)(image)
-    image = CondInstanceNorm(image, noise, x_dim = 2*ngf, z_dim = nlatent)
-    image = LeakyReLU(alpha=0.2)(image)
+        style2 = Dense(filters, kernel_initializer = init)(istyle)
+        out = Conv2DMod(filters = filters, kernel_size = 3, padding = 'same', kernel_initializer = init)([out, style2])
+        out = LeakyReLU(0.2)(out)
+        
+        rgb_out = Conv2DMod(3, 1, kernel_initializer = init, demod = False)([out, rgb_style])
     
-    image = Conv2D(filters = 4*ngf, kernel_size=3, strides=2, padding='same', kernel_initializer = init)(image)
-    image = CondInstanceNorm(image, noise, x_dim = 4*ngf, z_dim = nlatent)
-    image = LeakyReLU(alpha=0.2)(image)
+        return out, rgb_out
     
-    for i in range(3):
-        image = CINResnetBlock(image, noise, x_dim = 4*ngf, z_dim = nlatent)
+    latent = Reshape((nlatent,))(noise)
+    outs = []
+
+    out=image
     
-    image = Conv2DTranspose(filters = 2*ngf, kernel_size=3, strides=2, padding='same', kernel_initializer=init)(image)
-    image = CondInstanceNorm(image, noise, x_dim = 2*ngf, z_dim = nlatent)
-    image = LeakyReLU(alpha=0.2)(image)
+    for i in range(4):
+        out, rgb_out = g_block(inp=out, istyle=latent, filters=64)
+        outs.append(rgb_out)
     
-    image = Conv2D(filters = ngf, kernel_size=3, padding='same', kernel_initializer = init)(image)
-    image = CondInstanceNorm(image, noise, x_dim = ngf, z_dim = nlatent)
-    image = LeakyReLU(alpha=0.2)(image)
+    out_image = add(outs)
     
-    image = Conv2D(filters = 3, kernel_size=7, padding='same', kernel_initializer = init)(image)
-    #image = Activation('tanh')(image)
-    #image = Lambda(lambda x: 0.5*x + 0.5, output_shape=lambda x:x)(image)
     
-    return image
+    return out_image
     
 #--------------------------------------------------------------------------------------------------------------------   
 

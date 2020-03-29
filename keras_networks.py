@@ -5,10 +5,10 @@ Created on Sat Feb 29 17:56:58 2020
 @author: Georgios
 """
 
-from keras.layers import Input, Concatenate, Reshape
-from keras.models import Model
+from tensorflow.keras.layers import Input, Concatenate, Reshape
+from tensorflow.keras.models import Model
 from keras_modules import CINResnetGenerator, LatentEncoder, img_domain_critic, noise_domain_critic, noise_mapping_func
-from keras.engine.network import Network
+from tensorflow.python.keras.engine.network import Network
 
 
 #keras models needed for keras model Augmented CycleGAN
