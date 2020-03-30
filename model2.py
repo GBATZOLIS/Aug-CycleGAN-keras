@@ -224,35 +224,33 @@ class AugCycleGAN(object):
             E_B_loss = cycle_B_Za_loss + sup_loss_b
             
             
-            with tape.stop_recording():
-				#update Discriminators
-                
-                D_A_grads = tape.gradient(D_A_loss, self.D_A.trainable_variables)
-                self.D_A_opt.apply_gradients(zip(D_A_grads, self.D_A.trainable_variables))
-                
-                D_B_grads = tape.gradient(D_B_loss, self.D_B.trainable_variables)
-                self.D_B_opt.apply_gradients(zip(D_B_grads, self.D_B.trainable_variables))
-                
-                D_Za_grads = tape.gradient(D_Za_loss, self.D_Za.trainable_variables)
-                self.D_Za_opt.apply_gradients(zip(D_Za_grads, self.D_Za.trainable_variables))
-				
-                D_Zb_grads = tape.gradient(D_Zb_loss, self.D_Zb.trainable_variables)
-                self.D_Zb_opt.apply_gradients(zip(D_Zb_grads, self.D_Zb.trainable_variables))
-				
-				#Update G_AB and E_A only based on cycle starting from A
-                G_AB_grads = tape.gradient(G_AB_loss, self.G_AB.trainable_variables)
-                self.G_AB_opt.apply_gradients(zip(G_AB_grads, self.G_AB.trainable_variables))
-				
-                E_A_grads = tape.gradient(E_A_loss, self.E_A.trainable_variables)
-                self.E_A_opt.apply_gradients(zip(E_A_grads, self.E_A.trainable_variables))
-				
-				#Update G_BA and E_B only based on cycle starting from B
-                G_BA_grads = tape.gradient(G_BA_loss, self.G_BA.trainable_variables)
-                self.G_BA_opt.apply_gradients(zip(G_BA_grads, self.G_BA.trainable_variables))
-				
-                E_B_grads = tape.gradient(E_B_loss, self.E_B.trainable_variables)
-                self.E_B_opt.apply_gradients(zip(E_B_grads, self.E_B.trainable_variables))
+
+        D_A_grads = tape.gradient(D_A_loss, self.D_A.trainable_variables)
+        self.D_A_opt.apply_gradients(zip(D_A_grads, self.D_A.trainable_variables))
         
+        D_B_grads = tape.gradient(D_B_loss, self.D_B.trainable_variables)
+        self.D_B_opt.apply_gradients(zip(D_B_grads, self.D_B.trainable_variables))
+        
+        D_Za_grads = tape.gradient(D_Za_loss, self.D_Za.trainable_variables)
+        self.D_Za_opt.apply_gradients(zip(D_Za_grads, self.D_Za.trainable_variables))
+
+        D_Zb_grads = tape.gradient(D_Zb_loss, self.D_Zb.trainable_variables)
+        self.D_Zb_opt.apply_gradients(zip(D_Zb_grads, self.D_Zb.trainable_variables))
+
+		#Update G_AB and E_A only based on cycle starting from A
+        G_AB_grads = tape.gradient(G_AB_loss, self.G_AB.trainable_variables)
+        self.G_AB_opt.apply_gradients(zip(G_AB_grads, self.G_AB.trainable_variables))
+	
+        E_A_grads = tape.gradient(E_A_loss, self.E_A.trainable_variables)
+        self.E_A_opt.apply_gradients(zip(E_A_grads, self.E_A.trainable_variables))
+	
+		#Update G_BA and E_B only based on cycle starting from B
+        G_BA_grads = tape.gradient(G_BA_loss, self.G_BA.trainable_variables)
+        self.G_BA_opt.apply_gradients(zip(G_BA_grads, self.G_BA.trainable_variables))
+	
+        E_B_grads = tape.gradient(E_B_loss, self.E_B.trainable_variables)
+        self.E_B_opt.apply_gradients(zip(E_B_grads, self.E_B.trainable_variables))
+    
         return losses, sup_losses
             
     def train(self, epochs, batch_size=10, sample_interval=50):

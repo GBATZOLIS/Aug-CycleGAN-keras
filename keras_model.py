@@ -33,6 +33,17 @@ import tensorflow as tf
 #visualisation packages
 import matplotlib.pyplot as plt
   
+def discriminator_loss(real, generated):
+    # Multiplied by 0.5 so that it will train at half-speed
+    return (tf.reduce_mean(mse(tf.ones_like(real), real)) + tf.reduce_mean(mse(tf.zeros_like(generated), generated))) * 0.5
+
+# Measures how real the discriminator believes the fake image is
+def gen_loss(validity):
+    return tf.reduce_mean(mse(tf.ones_like(validity), validity))
+        
+def L1_loss(image1, image2):
+    return tf.reduce_mean(tf.abs(image1 - image2))
+        
 class AugCycleGAN(object):
     def __init__(self, img_shape, latent_shape):
         self.img_shape = img_shape
@@ -64,93 +75,78 @@ class AugCycleGAN(object):
         self.E_A_opt = self.E_B_opt = Adam(lr=0.0002, beta_1=0.5)
         self.D_Za_opt = self.D_Zb_opt = Adam(lr=0.0002, beta_1=0.5)
     
-    def supervised_cycle(self,):
-        a=Input(self.img_shape)
-        b=Input(self.img_shape)
-        
-        w_a_hat = self.E_A([a,b])
-        a_hat = self.G_BA([b,w_a_hat])
-        
-        w_b_hat = self.E_B([a,b])
-        b_hat = self.G_AB([a, w_b_hat])
-        
-        #I need to add a perceptual loss as well
-        model = Model(inputs=[a,b], outputs=[a_hat, b_hat], name='Supervised_Cyclic_model')
-        return model
-    
-    def supervised_step(self, a, b):
-        def L1_loss(image1, image2):
-            return tf.reduce_mean(tf.abs(image1 - image2))
-        
+    def supervised_step(self, a, b):     
         with tf.GradientTape(persistent=True) as tape:
-            z_a_hat = self.E_A([a,b])
-            a_hat = self.G_BA([b,z_a_hat])
+            z_a_hat = self.E_A([a,b], training=True)
+            a_hat = self.G_BA([b,z_a_hat], training=True)
             sup_loss_a = L1_loss(a,a_hat)
             
-            z_b_hat = self.E_B([a,b])
-            b_hat = self.G_AB([a, z_b_hat])
+            z_b_hat = self.E_B([a,b], training=True)
+            b_hat = self.G_AB([a, z_b_hat], training=True)
             sup_loss_b = L1_loss(b,b_hat)
                 
-            with tape.stop_recording():
-                #supervised loss a
-                G_BA_grads = tape.gradient(sup_loss_a, self.G_BA.trainable_variables)
-                self.G_BA_opt.apply_gradients(zip(G_BA_grads, self.G_BA.trainable_variables))
-                
-                E_A_grads = tape.gradient(sup_loss_a, self.E_A.trainable_variables)
-                self.E_A_opt.apply_gradients(zip(E_A_grads, self.E_A.trainable_variables))
-                
-                #supervised loss b
-                G_AB_grads = tape.gradient(sup_loss_b, self.G_AB.trainable_variables)
-                self.G_AB_opt.apply_gradients(zip(G_AB_grads, self.G_AB.trainable_variables))
-                
-                E_B_grads = tape.gradient(sup_loss_b, self.E_B.trainable_variables)
-                self.E_B_opt.apply_gradients(zip(E_B_grads, self.E_B.trainable_variables))
-                
+        
+        #supervised loss a
+        G_BA_grads = tape.gradient(sup_loss_a, self.G_BA.trainable_variables)
+        self.G_BA_opt.apply_gradients(zip(G_BA_grads, self.G_BA.trainable_variables))
+        
+        E_A_grads = tape.gradient(sup_loss_a, self.E_A.trainable_variables)
+        self.E_A_opt.apply_gradients(zip(E_A_grads, self.E_A.trainable_variables))
+        
+        #supervised loss b
+        G_AB_grads = tape.gradient(sup_loss_b, self.G_AB.trainable_variables)
+        self.G_AB_opt.apply_gradients(zip(G_AB_grads, self.G_AB.trainable_variables))
+        
+        E_B_grads = tape.gradient(sup_loss_b, self.E_B.trainable_variables)
+        self.E_B_opt.apply_gradients(zip(E_B_grads, self.E_B.trainable_variables))
+        
+        return sup_loss_a, sup_loss_b
                 
     
-    
-    def unsupervised_step(self, a, b, z_a, z_b):
-        
-        #Create the losses
-		# Measures how close to one real images are rated, and how close to zero fake images are rated
-        def discriminator_loss(real, generated):
-            # Multiplied by 0.5 so that it will train at half-speed
-            return (tf.reduce_mean(mse(tf.ones_like(real), real)) + tf.reduce_mean(mse(tf.zeros_like(generated), generated))) * 0.5
-
-		# Measures how real the discriminator believes the fake image is
-        def gen_loss(validity):
-            return tf.reduce_mean(mse(tf.ones_like(validity), validity))
-        
-        def L1_loss(image1, image2):
-            return tf.reduce_mean(tf.abs(image1 - image2))
+    def step_cycle_A(self, a, b, z_a, z_b):
         
         with tf.GradientTape(persistent=True) as tape:
-			#blur the imgA and imgB for appropriate blur supervision
-            #we want to incite the mapping function to keep the low-frequencies unchanged!
-            
-            blur_a = self.blurring(a, training=False)
-            blur_b = self.blurring(b, training=False)
-			#Create both cycles (starting from A and then from B)			
-			
-			#--------------------------------------------------------------
-            """starting from (A,zb)"""
-			#1st map
             b_hat = self.G_AB([a, z_b], training=True)
-            b_hat_blurred = self.blurring(b_hat, training=False)
             fake_b = self.D_B(b_hat, training=True)
             
             z_a_hat = self.E_A([a, b_hat], training=True)
             fake_z_a = self.D_Za(z_a_hat, training=True)
-			
-			#2nd map
+    
+    		#2nd map
             a_cyc = self.G_BA([b_hat, z_a_hat], training=True)
             z_b_cyc = self.E_B([a, b_hat], training=True)
-			
-			#-------------------------------------------------------------
-            """starting from (B,za)"""
-			#1st map
+        
+            D_B_loss = discriminator_loss(self.D_B(b, training=True), fake_b)
+            D_Za_loss = discriminator_loss(self.D_Za(z_a, training=True), fake_z_a)
+            
+            cycle_A_Zb_loss = gen_loss(fake_b)+gen_loss(fake_z_a)+L1_loss(a_cyc,a)+L1_loss(z_b_cyc,z_b)
+
+        D_B_grads = tape.gradient(D_B_loss, self.D_B.trainable_variables)
+        self.D_B_opt.apply_gradients(zip(D_B_grads, self.D_B.trainable_variables))
+                
+        D_Za_grads = tape.gradient(D_Za_loss, self.D_Za.trainable_variables)
+        self.D_Za_opt.apply_gradients(zip(D_Za_grads, self.D_Za.trainable_variables))
+                
+        G_AB_grads = tape.gradient(cycle_A_Zb_loss, self.G_AB.trainable_variables)
+        self.G_AB_opt.apply_gradients(zip(G_AB_grads, self.G_AB.trainable_variables))
+
+        E_A_grads = tape.gradient(cycle_A_Zb_loss, self.E_A.trainable_variables)
+        self.E_A_opt.apply_gradients(zip(E_A_grads, self.E_A.trainable_variables))
+
+		#Update G_BA and E_B only based on cycle starting from B
+        G_BA_grads = tape.gradient(cycle_A_Zb_loss, self.G_BA.trainable_variables)
+        self.G_BA_opt.apply_gradients(zip(G_BA_grads, self.G_BA.trainable_variables))
+
+        E_B_grads = tape.gradient(cycle_A_Zb_loss, self.E_B.trainable_variables)
+        self.E_B_opt.apply_gradients(zip(E_B_grads, self.E_B.trainable_variables))
+        
+        return D_B_loss, D_Za_loss, cycle_A_Zb_loss
+    
+    def step_cycle_B(self, a, b, z_a, z_b):
+        
+        
+        with tf.GradientTape(persistent=True) as tape:
             a_hat = self.G_BA([b, z_a], training=True)
-            a_hat_blurred = self.blurring(a_hat, training=False)
             fake_a = self.D_A(a_hat, training=True)
             
             z_b_hat = self.E_B([a_hat, b], training=True)
@@ -159,68 +155,32 @@ class AugCycleGAN(object):
 			#2nd map
             b_cyc = self.G_AB([a_hat, z_b_hat], training=True)
             z_a_cyc = self.E_A([a_hat, b], training=True)
-			#----------------------------------------------------------------
-			
-			
-			#Calculate all the losses
-			
-			#Discriminator losses
-            losses = {}
-            D_A_loss = discriminator_loss(self.D_A(a, training=True), fake_a)
-            losses['D_A'] = D_A_loss
-            
-            D_B_loss = discriminator_loss(self.D_B(b, training=True), fake_b)
-            losses['D_B'] = D_B_loss
-            
-            D_Za_loss = discriminator_loss(self.D_Za(z_a, training=True), fake_z_a)
-            losses['D_Za'] = D_Za_loss
-            
-            D_Zb_loss = discriminator_loss(self.D_Zb(z_b, training=True), fake_z_b)
-            losses['D_Zb'] = D_Zb_loss
-			
-            
-			#Generator losses
-			#G_AB, G_BA, E_A, E_B are all involved in each cycle
-			#However...
-			#compute gradients only wrt G_AB, E_A in cycle_A_Zb
-			#compute gradients only wrt G_BA, E_B in cycle_B_Za
-			
-			#compute the loss for the cycle starting from (A,zb)
-            cycle_A_Zb_loss = gen_loss(fake_b)+gen_loss(fake_z_a)+L1_loss(a_cyc,a)+L1_loss(z_b_cyc,z_b)+L1_loss(b_hat_blurred, blur_a)
-            losses['cycle_A_Zb'] = cycle_A_Zb_loss
-            cycle_B_Za_loss = gen_loss(fake_a)+gen_loss(fake_z_b)+L1_loss(b_cyc,b)+L1_loss(z_a_cyc,z_a)+L1_loss(a_hat_blurred, blur_b)
-            losses['cycle_B_Za']=cycle_B_Za_loss
-            
-            with tape.stop_recording():
-				#update Discriminators
-                
-                D_A_grads = tape.gradient(D_A_loss, self.D_A.trainable_variables)
-                self.D_A_opt.apply_gradients(zip(D_A_grads, self.D_A.trainable_variables))
-                
-                D_B_grads = tape.gradient(D_B_loss, self.D_B.trainable_variables)
-                self.D_B_opt.apply_gradients(zip(D_B_grads, self.D_B.trainable_variables))
-                
-                D_Za_grads = tape.gradient(D_Za_loss, self.D_Za.trainable_variables)
-                self.D_Za_opt.apply_gradients(zip(D_Za_grads, self.D_Za.trainable_variables))
-				
-                D_Zb_grads = tape.gradient(D_Zb_loss, self.D_Zb.trainable_variables)
-                self.D_Zb_opt.apply_gradients(zip(D_Zb_grads, self.D_Zb.trainable_variables))
-				
-				#Update G_AB and E_A only based on cycle starting from A
-                G_AB_grads = tape.gradient(cycle_A_Zb_loss, self.G_AB.trainable_variables)
-                self.G_AB_opt.apply_gradients(zip(G_AB_grads, self.G_AB.trainable_variables))
-				
-                E_A_grads = tape.gradient(cycle_A_Zb_loss, self.E_A.trainable_variables)
-                self.E_A_opt.apply_gradients(zip(E_A_grads, self.E_A.trainable_variables))
-				
-				#Update G_BA and E_B only based on cycle starting from B
-                G_BA_grads = tape.gradient(cycle_B_Za_loss, self.G_BA.trainable_variables)
-                self.G_BA_opt.apply_gradients(zip(G_BA_grads, self.G_BA.trainable_variables))
-				
-                E_B_grads = tape.gradient(cycle_B_Za_loss, self.E_B.trainable_variables)
-                self.E_B_opt.apply_gradients(zip(E_B_grads, self.E_B.trainable_variables))
         
-        return losses
+            D_A_loss = discriminator_loss(self.D_A(a, training=True), fake_a)
+            D_Zb_loss = discriminator_loss(self.D_Zb(z_b, training=True), fake_z_b)
+            
+            cycle_B_Za_loss = gen_loss(fake_a)+gen_loss(fake_z_b)+L1_loss(b_cyc,b)+L1_loss(z_a_cyc,z_a)
+
+        D_A_grads = tape.gradient(D_A_loss, self.D_A.trainable_variables)
+        self.D_A_opt.apply_gradients(zip(D_A_grads, self.D_A.trainable_variables))
+                
+        D_Zb_grads = tape.gradient(D_Zb_loss, self.D_Zb.trainable_variables)
+        self.D_Zb_opt.apply_gradients(zip(D_Zb_grads, self.D_Zb.trainable_variables))
+                
+        G_AB_grads = tape.gradient(cycle_B_Za_loss, self.G_AB.trainable_variables)
+        self.G_AB_opt.apply_gradients(zip(G_AB_grads, self.G_AB.trainable_variables))
+
+        E_A_grads = tape.gradient(cycle_B_Za_loss, self.E_A.trainable_variables)
+        self.E_A_opt.apply_gradients(zip(E_A_grads, self.E_A.trainable_variables))
+
+		#Update G_BA and E_B only based on cycle starting from B
+        G_BA_grads = tape.gradient(cycle_B_Za_loss, self.G_BA.trainable_variables)
+        self.G_BA_opt.apply_gradients(zip(G_BA_grads, self.G_BA.trainable_variables))
+
+        E_B_grads = tape.gradient(cycle_B_Za_loss, self.E_B.trainable_variables)
+        self.E_B_opt.apply_gradients(zip(E_B_grads, self.E_B.trainable_variables))
+        
+        return D_A_loss, D_Zb_loss, cycle_B_Za_loss
             
     def train(self, epochs, batch_size=10, sample_interval=50):
         start_time = datetime.datetime.now()
@@ -237,17 +197,18 @@ class AugCycleGAN(object):
                 
                 z_a = np.random.randn(batch_size, 1, 1, self.latent_shape[-1])
                 z_b = np.random.randn(batch_size, 1, 1, self.latent_shape[-1])
-                ulosses = self.unsupervised_step(img_A, img_B, z_a, z_b)
+                
+                D_B_loss, D_Za_loss, cycle_A_Zb_loss = self.step_cycle_A(img_A, img_B, z_a, z_b)
+                D_A_loss, D_Zb_loss, cycle_B_Za_loss = self.step_cycle_B(img_A, img_B, z_a, z_b)
+                sup_a, sup_b = self.supervised_step(sup_img_A, sup_img_B)
+                
                 elapsed_time = chop_microseconds(datetime.datetime.now() - start_time)
-                print('[%d/%d][%d/%d] - [%s:%.3f %s:%.3f %s:%.3f %s:%.3f] - [%s:%.3f %s:%.3f]'
+                print('[%d/%d][%d/%d]-[%s:%.3f %s:%.3f %s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f]-[time:%s]'
                       % (epoch, epochs, batch, self.data_loader.n_batches,
-                         'D_A', ulosses['D_A'], 'D_B', ulosses['D_B'], 'D_Za', ulosses['D_Za'], 'D_Zb', ulosses['D_Zb'],
-                         'cycle_A_Zb', ulosses['cycle_A_Zb'], 'cycle_B_Za', ulosses['cycle_B_Za']))
-                
-                self.supervised_step(sup_img_A, sup_img_B)
-                #sup_loss = self.sup_cyclic.train_on_batch([sup_img_A, sup_img_B],[sup_img_A, sup_img_B])
-                #print('[epoch:%d/%d][img_batch:%d/%d][--------------] [supA:%.3f - supB:%.3f]'%(epoch, epochs, batch, self.data_loader.n_batches, sup_loss[1], sup_loss[2]))
-                
+                         'D_A', D_A_loss, 'D_B', D_B_loss, 'D_Za', D_Za_loss, 'D_Zb', D_Zb_loss,
+                         'cyc_A_Zb', cycle_A_Zb_loss, 'cyc_B_Za', cycle_B_Za_loss,
+                         'sup_a', sup_a, 'sup_b', sup_b, elapsed_time))
+
                 if batch % 50 == 0 and not(batch==0 and epoch==0):
                     self.eval_training_points.append(training_point)
                     
@@ -271,7 +232,7 @@ class AugCycleGAN(object):
                     self.G_AB.save("models/G_AB_{}_{}.h5".format(epoch, batch))
                     self.G_BA.save("models/G_BA_{}_{}.h5".format(epoch, batch))
                     
-model = AugCycleGAN((100,100,3), (1,1,32))
+model = AugCycleGAN((100,100,3), (1,1,4))
 model.train(epochs=10, batch_size = 1)
 
     
