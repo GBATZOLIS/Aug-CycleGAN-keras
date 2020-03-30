@@ -1,5 +1,5 @@
-from keras.layers import Layer
-from keras import backend as K
+from tensorflow.keras.layers import Layer
+from tensorflow.keras import backend as K
 
 #Input b and g should be 1x1xC
 class AdaInstanceNormalization(Layer):
@@ -62,8 +62,8 @@ class AdaInstanceNormalization(Layer):
         return input_shape[0]
     
 
-from keras.layers import Layer, InputSpec
-from keras import initializers, regularizers, constraints
+from tensorflow.keras.layers import Layer, InputSpec
+from tensorflow.keras import initializers, regularizers, constraints
 
 
 

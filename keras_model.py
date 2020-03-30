@@ -238,21 +238,17 @@ class AugCycleGAN(object):
                 z_a = np.random.randn(batch_size, 1, 1, self.latent_shape[-1])
                 z_b = np.random.randn(batch_size, 1, 1, self.latent_shape[-1])
                 ulosses = self.unsupervised_step(img_A, img_B, z_a, z_b)
-                print(ulosses['D_A'])
                 elapsed_time = chop_microseconds(datetime.datetime.now() - start_time)
                 print('[%d/%d][%d/%d] - [%s:%.3f %s:%.3f %s:%.3f %s:%.3f] - [%s:%.3f %s:%.3f]'
                       % (epoch, epochs, batch, self.data_loader.n_batches,
                          'D_A', ulosses['D_A'], 'D_B', ulosses['D_B'], 'D_Za', ulosses['D_Za'], 'D_Zb', ulosses['D_Zb'],
                          'cycle_A_Zb', ulosses['cycle_A_Zb'], 'cycle_B_Za', ulosses['cycle_B_Za']))
                 
-                
-                
-                
-                print('optimisation batch: %d' % batch)
+                self.supervised_step(sup_img_A, sup_img_B)
                 #sup_loss = self.sup_cyclic.train_on_batch([sup_img_A, sup_img_B],[sup_img_A, sup_img_B])
                 #print('[epoch:%d/%d][img_batch:%d/%d][--------------] [supA:%.3f - supB:%.3f]'%(epoch, epochs, batch, self.data_loader.n_batches, sup_loss[1], sup_loss[2]))
                 
-                if batch % 100 == 0 and not(batch==0 and epoch==0):
+                if batch % 50 == 0 and not(batch==0 and epoch==0):
                     self.eval_training_points.append(training_point)
                     
                     dynamic_evaluator.model = self.G_AB
@@ -275,7 +271,7 @@ class AugCycleGAN(object):
                     self.G_AB.save("models/G_AB_{}_{}.h5".format(epoch, batch))
                     self.G_BA.save("models/G_BA_{}_{}.h5".format(epoch, batch))
                     
-model = AugCycleGAN((100,100,3), (1,1,4))
+model = AugCycleGAN((100,100,3), (1,1,32))
 model.train(epochs=10, batch_size = 1)
 
     
