@@ -209,14 +209,14 @@ class AugCycleGAN(object):
                          'cyc_A_Zb', cycle_A_Zb_loss, 'cyc_B_Za', cycle_B_Za_loss,
                          'sup_a', sup_a, 'sup_b', sup_b, elapsed_time))
 
-                if batch % 50 == 0 and not(batch==0 and epoch==0):
+                if batch % 100 == 0 and not(batch==0 and epoch==0):
                     self.eval_training_points.append(training_point)
                     
                     dynamic_evaluator.model = self.G_AB
                     #Perceptual Evaluation
                     dynamic_evaluator.test(batch_size=5, num_out_imgs=5, training_point=training_point, test_type='perception')
                     #Distortion Evaluation
-                    avg_ssim, avg_min_ssim, avg_max_ssim = dynamic_evaluator.test(batch_size=25, num_out_imgs=10, training_point=training_point, test_type='distortion')
+                    avg_ssim, avg_min_ssim, avg_max_ssim = dynamic_evaluator.test(batch_size=100, num_out_imgs=10, training_point=training_point, test_type='distortion')
                     self.avg_ssim.append(avg_ssim)
                     self.avg_min_ssim.append(avg_min_ssim)
                     self.avg_max_ssim.append(avg_max_ssim)
