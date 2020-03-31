@@ -52,6 +52,7 @@ class AugCycleGAN(object):
         #log settings
         self.eval_training_points = []
         self.avg_ssim, self.avg_min_ssim, self.avg_max_ssim = [], [], []
+        self.ep_avg_ssim, self.ep_avg_min_ssim, self.ep_avg_max_ssim = [], [], []
         
         #discriminator ground-truths
         self.D_A_out_shape = (img_shape[0]//4, img_shape[1]//4, 1)
@@ -216,7 +217,7 @@ class AugCycleGAN(object):
                     #Perceptual Evaluation
                     dynamic_evaluator.test(batch_size=5, num_out_imgs=5, training_point=training_point, test_type='perception')
                     #Distortion Evaluation
-                    avg_ssim, avg_min_ssim, avg_max_ssim = dynamic_evaluator.test(batch_size=100, num_out_imgs=10, training_point=training_point, test_type='distortion')
+                    avg_ssim, avg_min_ssim, avg_max_ssim = dynamic_evaluator.test(batch_size=30, num_out_imgs=10, training_point=training_point, test_type='distortion')
                     self.avg_ssim.append(avg_ssim)
                     self.avg_min_ssim.append(avg_min_ssim)
                     self.avg_max_ssim.append(avg_max_ssim)
@@ -231,9 +232,24 @@ class AugCycleGAN(object):
                     #save the generators
                     self.G_AB.save("models/G_AB_{}_{}.h5".format(epoch, batch))
                     self.G_BA.save("models/G_BA_{}_{}.h5".format(epoch, batch))
-                    
+            
+            avg_ssim, avg_min_ssim, avg_max_ssim = dynamic_evaluator.test(batch_size=100, num_out_imgs=20, training_point=None, test_type='distortion')
+            self.ep_avg_ssim.append(avg_ssim)
+            self.ep_avg_min_ssim.append(avg_min_ssim)
+            self.ep_avg_max_ssim.append(avg_max_ssims)
+            
+            plt.figure(figsize=(21,15))
+            plt.plot(self.ep_avg_ssim, label='Avg Mean SSIM')
+            plt.plot(self.ep_avg_min_ssim, label='Avg Min SSIM')
+            plt.plot(self.ep_avg_max_ssim, label='Avg Max SSIM')
+            plt.legend()
+            plt.savefig('progress/distortion/ep_distortion_performance.png', bbox_inches='tight')
+            
+            
 model = AugCycleGAN((100,100,3), (1,1,4))
 model.train(epochs=10, batch_size = 1)
+
+
 
     
 

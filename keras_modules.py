@@ -111,18 +111,15 @@ def CINResnetGenerator(image, noise, ngf, nlatent):
     image = Lambda(lambda x: 2*x - 1, output_shape=lambda x:x)(image)
     
     image = Conv2D(filters = ngf, kernel_size=7, padding='same', kernel_initializer = init)(image)
-    #image = InstanceNormalization(axis=-1, center = False, scale = False)(image)
     image = LeakyReLU(alpha=0.2)(image)
     
-    style1 = Dense(image.shape[-1], kernel_initializer = init)(noise)
-    image = Conv2DMod(filters = ngf, kernel_size = 3, padding = 'same', kernel_initializer = init)([image, style1])
+    image = Conv2D(filters = ngf, kernel_size=3, padding='same', kernel_initializer = init)(image)
     image = LeakyReLU(alpha=0.2)(image)
     
-    style2 = Dense(image.shape[-1], kernel_initializer = init)(noise)
-    image = Conv2DMod(filters = 2*ngf, kernel_size = 3, padding = 'same', kernel_initializer = init)([image, style2])
+    image = Conv2D(filters = 2*ngf, kernel_size=3, padding='same', kernel_initializer = init)(image)
     image = LeakyReLU(alpha=0.2)(image)
     
-    for i in range(4):
+    for i in range(3):
         image = CINResnetBlock(image, noise, 2*ngf)
 
     style4 = Dense(image.shape[-1], kernel_initializer = init)(noise)
