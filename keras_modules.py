@@ -112,14 +112,25 @@ def CINResnetGenerator(image, noise, ngf, nlatent):
     
     init = RandomNormal(stddev=0.02)
     
+    noise = Reshape((nlatent,))(noise)
+    
     image = Conv2D(filters = ngf, kernel_size=7, padding='same', kernel_initializer = init)(image)
-    image = InstanceNormalization(axis=-1, center = False, scale = False)(image)
+    #image = InstanceNormalization(axis=-1, center = False, scale = False)(image)
     image = LeakyReLU(alpha=0.2)(image)
     
-    image = Conv2D(filters = 2*ngf, kernel_size=3, padding='same', kernel_initializer = init)(image)
-    image = InstanceNormalization(axis=-1, center = False, scale = False)(image)
+    style1 = Dense(image.shape[-1], kernel_initializer = init)(noise)
+    image = Conv2DMod(filters = ngf, kernel_size = 3, padding = 'same', kernel_initializer = init)([image, style1])
     image = LeakyReLU(alpha=0.2)(image)
     
+    style2 = Dense(image.shape[-1], kernel_initializer = init)(noise)
+    image = Conv2DMod(filters = 2*ngf, kernel_size = 3, padding = 'same', kernel_initializer = init)([image, style2])
+    image = LeakyReLU(alpha=0.2)(image)
+    
+    style3 = Dense(image.shape[-1], kernel_initializer = init)(noise)
+    image = Conv2DMod(filters = 2*ngf, kernel_size = 3, padding = 'same', kernel_initializer = init)([image, style3])
+    image = LeakyReLU(alpha=0.2)(image)
+    
+    """
     image = Conv2D(filters = 4*ngf, kernel_size=3, strides=2, padding='same', kernel_initializer = init)(image)
     image = InstanceNormalization(axis=-1, center = False, scale = False)(image)
     image = LeakyReLU(alpha=0.2)(image)
@@ -131,14 +142,15 @@ def CINResnetGenerator(image, noise, ngf, nlatent):
     #image = CondInstanceNorm(image, noise, x_dim = 2*ngf, z_dim = nlatent)
     image = InstanceNormalization(axis=-1, center = False, scale = False)(image)
     image = LeakyReLU(alpha=0.2)(image)
+    """
     
-    noise = Reshape((nlatent,))(noise)
-    style1 = Dense(image.shape[-1], kernel_initializer = init)(noise)
-    image = Conv2DMod(filters = ngf, kernel_size = 3, padding = 'same', kernel_initializer = init)([image, style1])
+    
+    style4 = Dense(image.shape[-1], kernel_initializer = init)(noise)
+    image = Conv2DMod(filters = 2*ngf, kernel_size = 3, padding = 'same', kernel_initializer = init)([image, style4])
     image = LeakyReLU(alpha=0.2)(image)
     
-    style2 = Dense(image.shape[-1], kernel_initializer = init)(noise)
-    image = Conv2DMod(filters = ngf, kernel_size = 3, padding = 'same', kernel_initializer = init)([image, style2])
+    style5 = Dense(image.shape[-1], kernel_initializer = init)(noise)
+    image = Conv2DMod(filters = ngf, kernel_size = 3, padding = 'same', kernel_initializer = init)([image, style5])
     image = LeakyReLU(alpha=0.2)(image)
        
     image = Conv2D(filters = 3, kernel_size=7, padding='same', kernel_initializer = init)(image)
