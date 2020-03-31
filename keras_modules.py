@@ -43,10 +43,6 @@ class ReflectionPadding2D(ZeroPadding2D):
 def CondInstanceNorm(image, noise, x_dim, z_dim):
     init = RandomNormal(stddev=0.02)
     
-    #noise = Reshape((z_dim,))(noise)
-    #noise = Dense(z_dim, kernel_initializer = init)(noise)
-    #noise = Dense(z_dim, kernel_initializer = init)(noise)
-    #noise = Reshape((1,1,z_dim))(noise)
     
     shift_conv = Conv2D(filters = x_dim, kernel_size=1, padding='same', kernel_initializer = init)(noise)
     shift_conv = LeakyReLU(alpha=0.2)(shift_conv)
@@ -64,11 +60,13 @@ def CINResnetBlock(image, noise, x_dim, z_dim):
         init = RandomNormal(stddev=0.02)
         
         image = Conv2D(filters = x_dim, kernel_size=3, padding='same', kernel_initializer = init)(image)
-        image = CondInstanceNorm(image, noise, x_dim, z_dim)
+        #image = CondInstanceNorm(image, noise, x_dim, z_dim)
+        image = InstanceNormalization(axis=-1, center = False, scale = False)(image)
         image = LeakyReLU(alpha=0.2)(image)
         
         image = Conv2D(filters = x_dim, kernel_size=3, padding='same', kernel_initializer = init)(image)
         image = InstanceNormalization(axis=-1, center = False, scale = False)(image)
+        image = LeakyReLU(alpha=0.2)(image)
         
         return image
     
@@ -82,7 +80,7 @@ def CINResnetGenerator(image, noise, ngf, nlatent):
     #ngf: number of generator filters
     #nlatent: the dimensionality of the latent space
     
-    
+    """
     def g_block(inp, istyle, filters):
         init = RandomNormal(stddev=0.02)
         
@@ -110,9 +108,44 @@ def CINResnetGenerator(image, noise, ngf, nlatent):
         outs.append(rgb_out)
     
     out_image = add(outs)
+    """
     
+    init = RandomNormal(stddev=0.02)
     
-    return out_image
+    image = Conv2D(filters = ngf, kernel_size=7, padding='same', kernel_initializer = init)(image)
+    image = InstanceNormalization(axis=-1, center = False, scale = False)(image)
+    image = LeakyReLU(alpha=0.2)(image)
+    
+    image = Conv2D(filters = 2*ngf, kernel_size=3, padding='same', kernel_initializer = init)(image)
+    image = InstanceNormalization(axis=-1, center = False, scale = False)(image)
+    image = LeakyReLU(alpha=0.2)(image)
+    
+    image = Conv2D(filters = 4*ngf, kernel_size=3, strides=2, padding='same', kernel_initializer = init)(image)
+    image = InstanceNormalization(axis=-1, center = False, scale = False)(image)
+    image = LeakyReLU(alpha=0.2)(image)
+    
+    for i in range(3):
+        image = CINResnetBlock(image, noise, x_dim = 4*ngf, z_dim = nlatent)
+    
+    image = Conv2DTranspose(filters = 2*ngf, kernel_size=3, strides=2, padding='same', kernel_initializer=init)(image)
+    #image = CondInstanceNorm(image, noise, x_dim = 2*ngf, z_dim = nlatent)
+    image = InstanceNormalization(axis=-1, center = False, scale = False)(image)
+    image = LeakyReLU(alpha=0.2)(image)
+    
+    noise = Reshape((nlatent,))(noise)
+    style1 = Dense(image.shape[-1], kernel_initializer = init)(noise)
+    image = Conv2DMod(filters = ngf, kernel_size = 3, padding = 'same', kernel_initializer = init)([image, style1])
+    image = LeakyReLU(alpha=0.2)(image)
+    
+    style2 = Dense(image.shape[-1], kernel_initializer = init)(noise)
+    image = Conv2DMod(filters = ngf, kernel_size = 3, padding = 'same', kernel_initializer = init)([image, style2])
+    image = LeakyReLU(alpha=0.2)(image)
+       
+    image = Conv2D(filters = 3, kernel_size=7, padding='same', kernel_initializer = init)(image)
+    #image = Activation('tanh')(image)
+    #image = Lambda(lambda x: 0.5*x + 0.5, output_shape=lambda x:x)(image)
+    
+    return image
     
 #--------------------------------------------------------------------------------------------------------------------   
 
