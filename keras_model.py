@@ -196,11 +196,13 @@ class AugCycleGAN(object):
                 training_point = np.around(epoch+batch/self.data_loader.n_batches, 3)
                 #generate the noise vectors from the N(0,sigma^2) distribution
                 
-                z_a = np.random.randn(batch_size, 1, 1, self.latent_shape[-1])
-                z_b = np.random.randn(batch_size, 1, 1, self.latent_shape[-1])
+                for i in range(4):
+                    z_a = np.random.randn(batch_size, 1, 1, self.latent_shape[-1])
+                    z_b = np.random.randn(batch_size, 1, 1, self.latent_shape[-1])
+                    
+                    D_B_loss, D_Za_loss, cycle_A_Zb_loss = self.step_cycle_A(img_A, img_B, z_a, z_b)
+                    D_A_loss, D_Zb_loss, cycle_B_Za_loss = self.step_cycle_B(img_A, img_B, z_a, z_b)
                 
-                D_B_loss, D_Za_loss, cycle_A_Zb_loss = self.step_cycle_A(img_A, img_B, z_a, z_b)
-                D_A_loss, D_Zb_loss, cycle_B_Za_loss = self.step_cycle_B(img_A, img_B, z_a, z_b)
                 sup_a, sup_b = self.supervised_step(sup_img_A, sup_img_B)
                 
                 elapsed_time = chop_microseconds(datetime.datetime.now() - start_time)
@@ -236,7 +238,7 @@ class AugCycleGAN(object):
             avg_ssim, avg_min_ssim, avg_max_ssim = dynamic_evaluator.test(batch_size=100, num_out_imgs=20, training_point=None, test_type='distortion')
             self.ep_avg_ssim.append(avg_ssim)
             self.ep_avg_min_ssim.append(avg_min_ssim)
-            self.ep_avg_max_ssim.append(avg_max_ssims)
+            self.ep_avg_max_ssim.append(avg_max_ssim)
             
             plt.figure(figsize=(21,15))
             plt.plot(self.ep_avg_ssim, label='Avg Mean SSIM')
