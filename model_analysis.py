@@ -52,15 +52,15 @@ def get_random_patch(img, patch_dimension):
 img_shape = (100,100,3)
 latent_shape=(1,1,2)
 
-model_name = 'G_AB_10_0.h5'
+model_name = 'G_AB_20_0.h5'
 
 model = G_AB(img_shape=img_shape, latent_shape=latent_shape) #define model architecture
 model.load_weights("models/%s" % (model_name)) #load the saved weights
 
-y_true = plt.imread('data/testA/179.jpg').astype(np.float)
+y_true = plt.imread('data/testA/833.jpg').astype(np.float)
 y_true = y_true/255
 
-x_true = plt.imread('data/testA/179.jpg').astype(np.float)
+x_true = plt.imread('data/testA/833.jpg').astype(np.float)
 #x_true = get_random_patch(x_true, (500,500))
 x_true = x_true/255
 x = np.expand_dims(x_true, axis=0)
@@ -104,9 +104,16 @@ images[0].save('progress/image.gif',
 
 
 
-
-
-
+z=np.zeros((1,1,1,2))
+z[0,0,0,:]=np.array([-0.0068,-1.583])
+y_pred = model.predict([x,z])
+fig, axs = plt.subplots(1, 3)
+ax=axs[0]
+ax.imshow(x_true)
+ax=axs[1]
+ax.imshow(y_pred[0])
+ax=axs[2]
+ax.imshow(y_true)
 
 
 
@@ -177,8 +184,8 @@ y_co=[]
 omega=1
 T=2*np.pi/omega
 N=100 #steps per revolution
-x_mode = 0
-y_mode = -0.77
+x_mode = -0.0668
+y_mode = -1.583
 
 
 images=[]
@@ -204,7 +211,8 @@ images[0].save('progress/image.gif',
 #--------------------------------------------------------------------------------
 
 
-"""
+
+
 
 delta = 0.2
 z1 = np.arange(-3, 3, delta)
@@ -221,6 +229,6 @@ for i in tqdm(range(len(z1))):
         
 plt.contour(z1,z2,SSIM, levels=1000, cmap="RdBu_r")
 plt.colorbar()
-#plt.plot(x_co, y_co, 'ko', ms=1)
-"""
+plt.plot(x_co, y_co, 'ko', ms=1)
+
 

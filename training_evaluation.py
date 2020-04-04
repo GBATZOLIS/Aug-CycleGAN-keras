@@ -19,15 +19,22 @@ import numpy as np
 from tqdm import tqdm
 from skimage.metrics import structural_similarity as ssim
 import matplotlib.pyplot as plt
-import collections
 import os
+from lpips import lpips
+import tensorflow as tf
+
+
+
+print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
 
 class train_eval(object):
     def __init__(self,img_shape=(100,100,3), latent_size=2):
         self.img_shape = img_shape
         self.latent_size = latent_size
         self.latent_shape = (1,1,latent_size)
-    
+        
+        self.metric = lpips((100,100,3))
+        self.metric.create_model()
     
     #function to perform distortion evaluation of a model
     def distortion(self, model_name, no_samples):
@@ -36,58 +43,93 @@ class train_eval(object):
 
         model = G_AB(self.img_shape, self.latent_shape) #define model architecture
         model.load_weights("models/%s" % (model_name)) #load the saved weights
+        model.trainable=False
         
-        
-        phone_paths = glob('data/testA/*')[:10]
-        dslr_paths = glob('data/testB/*')[:10]
+        phone_paths = glob('data/testA/*')
+        dslr_paths = glob('data/testB/*')
 
         ssim_vals=np.zeros((len(phone_paths), no_samples))
 
-        print(ssim_vals.shape)
         i=0
+        
+        
+        print('model: %s' % model_name)
         for phone_path, dslr_path in tqdm(zip(phone_paths, dslr_paths)):
             x_true = plt.imread(phone_path).astype(np.float)
             x_true = x_true/255
             x = np.expand_dims(x_true, axis=0) #form needed to pass to the network 
+            x = tf.convert_to_tensor(x)
             
             y_true = plt.imread(dslr_path).astype(np.float)
             y_true = y_true/255
-            
-            for j in range(no_samples):
-                z = np.random.randn(1,1,1, self.latent_size)
-                y_pred = model.predict([x,z])
-                ssim_vals[i,j] = ssim(y_pred[0],y_true, multichannel=True)
+            y_true = np.expand_dims(y_true, axis=0)
+            y_true = tf.convert_to_tensor(y_true)
+            with tf.device('/GPU:0'):
+                self.metric.set_reference(y_true)
+                for j in range(no_samples):
+                    z = tf.random.normal(shape=(1,1,1, self.latent_size))
+                    y_pred = model([x,z])
+                    #ssim_vals[i,j] = ssim(y_pred[0],y_true, multichannel=True)
+                    ssim_vals[i,j] = self.metric.distance(y_pred)
+                    #print(ssim_vals[i,j])
             i+=1
         
+        #print(np.mean(ssim_vals), np.std(ssim_vals))
         return np.mean(ssim_vals), np.std(ssim_vals)
     
     def models_distortion(self, no_samples):
         
         model_names = glob('models/*.h5')
-        print(model_names)
         AB_model_names = []
         for model_name in model_names:
             if model_name.split('_')[1]=='AB':
                 model_name=os.path.basename(model_name)
                 AB_model_names.append(model_name)
-        print(AB_model_names)
         AB_model_names = sorted(AB_model_names)
         
         model_info = {}
-        for model_name in AB_model_names:
+        training_points = []
+        mean_vals = []
+        std_vals = []
+        max_batch=500
+        for model_name in tqdm(AB_model_names):
+            #infer and save the training point
+            epoch = int(model_name.split('_')[2])
+            batch = int(model_name.split('_')[3].split('.')[0])
+            training_point = epoch+batch/max_batch
+            training_points.append(training_point) 
+            
+            #get model performance and save it
             mean_ssim, std_ssim = self.distortion(model_name, no_samples)
+            mean_vals.append(mean_ssim)
+            std_vals.append(std_ssim)
             model_info[model_name]=[mean_ssim, std_ssim]
         
+        mean_vals=np.array(mean_vals)
+        std_vals=np.array(std_vals)
+        plt.figure()
+        plt.plot(training_points, mean_vals+2*std_vals, label='mean+2std')
+        plt.plot(training_points, mean_vals-2*std_vals, label='mean-2std')
+        plt.plot(training_points, mean_vals, label='mean')
+        plt.legend()
+        plt.savefig('progress/lpips.png', bbox_inches='tight')
+        
         #list the names in decreasing order wrt to first argument
-        ordered_model_info=sorted(model_info.items(), key=lambda t: t[1][0])
+        ordered_model_info=sorted(model_info.items(), key=lambda t: t[1][0], reverse=True)
         
         for info in ordered_model_info:
-            print('%s: mean SSIM: %.4f --- std SSIM: %.4f' % (info[0], info[1][0], info[1][1]))
-    
+            print('%s: mean LPIPS: %.4f --- std LPIPS: %.4f' % (info[0], info[1][0], info[1][1]))
+        
+        return ordered_model_info
 
 #testing of distortion function
 train_evaluation = train_eval()
+#m,s = train_evaluation.distortion(model_name='G_AB_28_400.h5', no_samples=10)
+
+#print(m,s)
 train_evaluation.models_distortion(10)
+
+
 
 
 """

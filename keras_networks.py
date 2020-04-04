@@ -10,7 +10,7 @@ from tensorflow.keras.models import Model
 from keras_modules import CINResnetGenerator, LatentEncoder, img_domain_critic, noise_domain_critic, noise_mapping_func
 from tensorflow.python.keras.engine.network import Network
 
-
+    
 #keras models needed for keras model Augmented CycleGAN
 
 def G_AB(img_shape, latent_shape):

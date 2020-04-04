@@ -21,6 +21,8 @@ from conv_mod import *
 import scipy.stats as st
 import numpy as np
 
+    
+    
 """General useful modules"""
 #-----------------------------------------------------------------------------------
 # Extending the ZeroPadding2D layer to do reflection padding instead.
