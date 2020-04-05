@@ -29,6 +29,8 @@ from keras_networks import G_AB, G_BA, E_A, E_B, D_A, D_B, D_Za, D_Zb, N_map
 from keras_evaluator import evaluator
 from tensorflow.keras.losses import mse
 import tensorflow as tf
+from lpips import lpips
+
 
 #visualisation packages
 import matplotlib.pyplot as plt
@@ -50,9 +52,26 @@ class AugCycleGAN(object):
         self.latent_shape = latent_shape
         
         #log settings
-        self.eval_training_points = []
-        self.avg_ssim, self.avg_min_ssim, self.avg_max_ssim = [], [], []
-        self.ep_avg_ssim, self.ep_avg_min_ssim, self.ep_avg_max_ssim = [], [], []
+        self.train_info={}
+        self.train_info['eval_points'] = []
+        
+        #Every N batches (usually 100) we calculate LPIPS and SSIM on test data
+        #We use M images and K output images for each image for the evaluation
+        #At the end of each epoch we calculate LPIPS and SSIM 
+        #on the entire test dataset using 20 output images for each image
+        #We want to get as less noisy estimation of the performance of the model as possible
+        #The first list holds the sample interval measurements, the second holds the ep measurements
+        self.train_info['ssim_mean']=[[],[]]
+        self.train_info['ssim_min']=[[],[]]
+        self.train_info['ssim_max']=[[],[]]
+        self.train_info['ssim_std']=[[],[]]
+        
+        self.train_info['lpips_mean']=[[],[]]
+        self.train_info['lpips_min']=[[],[]]
+        self.train_info['lpips_max']=[[],[]]
+        self.train_info['lpips_std']=[[],[]]
+        
+        
         
         #discriminator ground-truths
         self.D_A_out_shape = (img_shape[0]//4, img_shape[1]//4, 1)
@@ -61,14 +80,18 @@ class AugCycleGAN(object):
         #configure data loader
         self.data_loader = DataLoader(img_res=(self.img_shape[0], self.img_shape[1]))
         
+        #instantiate the LPIPS loss object
+        self.lpips = lpips(self.img_shape)
+        self.lpips.create_model()
+        
         self.G_AB = G_AB(img_shape, latent_shape)
         self.G_BA = G_BA(img_shape, latent_shape)
         self.E_A = E_A(img_shape, latent_shape)
         self.E_B = E_B(img_shape, latent_shape)
-        self.D_A, self.D_A_static = D_A(img_shape)
-        self.D_B, self.D_B_static = D_B(img_shape)
-        self.D_Za, self.D_Za_static = D_Za(latent_shape) 
-        self.D_Zb, self.D_Zb_static = D_Zb(latent_shape)
+        self.D_A = D_A(img_shape)
+        self.D_B = D_B(img_shape)
+        self.D_Za = D_Za(latent_shape) 
+        self.D_Zb = D_Zb(latent_shape)
         self.blurring = blur(img_shape)
         
         self.G_AB_opt = self.G_BA_opt = Adam(lr=0.0002, beta_1=0.5)
@@ -80,11 +103,11 @@ class AugCycleGAN(object):
         with tf.GradientTape(persistent=True) as tape:
             z_a_hat = self.E_A([a,b], training=True)
             a_hat = self.G_BA([b,z_a_hat], training=True)
-            sup_loss_a = L1_loss(a,a_hat)
+            sup_loss_a = 0.2*L1_loss(a,a_hat)+self.lpips.distance(a,a_hat)
             
             z_b_hat = self.E_B([a,b], training=True)
             b_hat = self.G_AB([a, z_b_hat], training=True)
-            sup_loss_b = L1_loss(b,b_hat)
+            sup_loss_b = 0.2*L1_loss(b,b_hat)+self.lpips.distance(b,b_hat)
                 
         
         #supervised loss a
@@ -193,7 +216,7 @@ class AugCycleGAN(object):
         dynamic_evaluator = evaluator(self.img_shape, self.latent_shape)
         for epoch in range(epochs):
             for batch, (img_A, img_B, sup_img_A, sup_img_B) in enumerate(self.data_loader.load_batch(batch_size)):
-                training_point = np.around(epoch+batch/self.data_loader.n_batches, 3)
+                
                 #generate the noise vectors from the N(0,sigma^2) distribution
                 
                 for i in range(4):
@@ -212,40 +235,105 @@ class AugCycleGAN(object):
                          'cyc_A_Zb', cycle_A_Zb_loss, 'cyc_B_Za', cycle_B_Za_loss,
                          'sup_a', sup_a, 'sup_b', sup_b, elapsed_time))
 
-                if batch % 100 == 0 and not(batch==0 and epoch==0):
-                    self.eval_training_points.append(training_point)
-                    
+                if batch % 3 == 0 and not(batch==0 and epoch==0):
+                    training_point = np.around(epoch+batch/self.data_loader.n_batches, 3)
+                    self.train_info['eval_points'].append(training_point)
+                    print(self.train_info['eval_points'])
                     dynamic_evaluator.model = self.G_AB
-                    #Perceptual Evaluation
-                    dynamic_evaluator.test(batch_size=5, num_out_imgs=5, training_point=training_point, test_type='perception')
-                    #Distortion Evaluation
-                    avg_ssim, avg_min_ssim, avg_max_ssim = dynamic_evaluator.test(batch_size=30, num_out_imgs=10, training_point=training_point, test_type='distortion')
-                    self.avg_ssim.append(avg_ssim)
-                    self.avg_min_ssim.append(avg_min_ssim)
-                    self.avg_max_ssim.append(avg_max_ssim)
+                    #Perception and distortion evaluation
+                    info = dynamic_evaluator.test(batch_size=10, num_out_imgs=10, training_point=training_point, test_type='mixed')
+                    
+                    
+                    self.train_info['ssim_mean'][0].append(info['ssim_mean'])
+                    print(self.train_info['ssim_mean'][0])
+                    self.train_info['ssim_min'][0].append(info['ssim_min'])
+                    self.train_info['ssim_max'][0].append(info['ssim_max'])
+                    self.train_info['ssim_std'][0].append(info['ssim_std'])
+                    
+                    self.train_info['lpips_mean'][0].append(info['lpips_mean'])
+                    self.train_info['lpips_min'][0].append(info['lpips_min'])
+                    self.train_info['lpips_max'][0].append(info['lpips_max'])
+                    self.train_info['lpips_std'][0].append(info['lpips_std'])
                     
                     plt.figure(figsize=(21,15))
-                    plt.plot(self.eval_training_points, self.avg_ssim, label='Avg Mean SSIM')
-                    plt.plot(self.eval_training_points, self.avg_min_ssim, label='Avg Min SSIM')
-                    plt.plot(self.eval_training_points, self.avg_max_ssim, label='Avg Max SSIM')
+                    plt.title('SSIM (100x10)')
+                    plt.plot(np.array(self.train_info['eval_points']), np.array(self.train_info['ssim_mean'][0]), label='mean')
+                    plt.plot(np.array(self.train_info['eval_points']), 
+                             np.add(np.array(self.train_info['ssim_mean'][0]),2*np.array(self.train_info['ssim_std'][0])), label='mean+2std')
+                    plt.plot(np.array(self.train_info['eval_points']), 
+                             np.add(np.array(self.train_info['ssim_mean'][0]),-1*2*np.array(self.train_info['ssim_std'][0])), label='mean-2std')
+                    plt.plot(np.array(self.train_info['eval_points']), np.array(self.train_info['ssim_min'][0]), label='min')
+                    plt.plot(np.array(self.train_info['eval_points']), np.array(self.train_info['ssim_max'][0]), label='max')
                     plt.legend()
-                    plt.savefig('progress/distortion/distortion_performance.png', bbox_inches='tight')
+                    plt.savefig('progress/distortion/SSIM.png', bbox_inches='tight')
+                    
+                    
+                    plt.figure(figsize=(21,15))
+                    plt.title('LPIPS (100x10)')
+                    plt.plot(np.array(self.train_info['eval_points']), np.array(self.train_info['lpips_mean'][0]), label='mean')
+                    plt.plot(np.array(self.train_info['eval_points']), 
+                             np.add(np.array(self.train_info['lpips_mean'][0]),2*np.array(self.train_info['lpips_std'][0])), label='mean+2std')
+                    plt.plot(np.array(self.train_info['eval_points']), 
+                             np.add(np.array(self.train_info['lpips_mean'][0]),-1*2*np.array(self.train_info['lpips_std'][0])), label='mean-2std')
+                    plt.plot(np.array(self.train_info['eval_points']), np.array(self.train_info['lpips_min'][0]), label='min')
+                    plt.plot(np.array(self.train_info['eval_points']), np.array(self.train_info['lpips_max'][0]), label='max')
+                    plt.legend()
+                    plt.savefig('progress/perception/LPIPS.png', bbox_inches='tight')
+                    plt.close('all')
+                    
                     
                     #save the generators
                     self.G_AB.save("models/G_AB_{}_{}.h5".format(epoch, batch))
-                    self.G_BA.save("models/G_BA_{}_{}.h5".format(epoch, batch))
+                    #self.G_BA.save("models/G_BA_{}_{}.h5".format(epoch, batch))
             
-            avg_ssim, avg_min_ssim, avg_max_ssim = dynamic_evaluator.test(batch_size=100, num_out_imgs=20, training_point=None, test_type='distortion')
-            self.ep_avg_ssim.append(avg_ssim)
-            self.ep_avg_min_ssim.append(avg_min_ssim)
-            self.ep_avg_max_ssim.append(avg_max_ssim)
+            
+            
+            dynamic_evaluator.model = self.G_AB #set the current G_AB model for evaluation
+            #Perception and distortion evaluation on the entire test dataset
+            info = dynamic_evaluator.test(batch_size=4000, num_out_imgs=10, training_point=training_point, test_type='mixed')
+            
+            self.train_info['ssim_mean'][1].append(info['ssim_mean'])
+            self.train_info['ssim_min'][1].append(info['ssim_min'])
+            self.train_info['ssim_max'][1].append(info['ssim_max'])
+            self.train_info['ssim_std'][1].append(info['ssim_std'])
+            
+            self.train_info['lpips_mean'][1].append(info['lpips_mean'])
+            self.train_info['lpips_min'][1].append(info['lpips_min'])
+            self.train_info['lpips_max'][1].append(info['lpips_max'])
+            self.train_info['lpips_std'][1].append(info['lpips_std'])
             
             plt.figure(figsize=(21,15))
-            plt.plot(self.ep_avg_ssim, label='Avg Mean SSIM')
-            plt.plot(self.ep_avg_min_ssim, label='Avg Min SSIM')
-            plt.plot(self.ep_avg_max_ssim, label='Avg Max SSIM')
+            plt.title('SSIM (test dataset)')
+            plt.plot(self.train_info['ssim_mean'][1], label='mean')
+            plt.plot(np.array(self.train_info['ssim_mean'][1])+2*np.array(self.train_info['ssim_std'][1]), label='mean+2std')
+            plt.plot(np.array(self.train_info['ssim_mean'][1])-2*np.array(self.train_info['ssim_std'][1]), label='mean-2std')
+            plt.plot(self.train_info['ssim_min'][1], label='min')
+            plt.plot(self.train_info['ssim_max'][1], label='max')
             plt.legend()
-            plt.savefig('progress/distortion/ep_distortion_performance.png', bbox_inches='tight')
+            plt.savefig('progress/distortion/SSIM_epoch.png', bbox_inches='tight')
+            
+            
+            plt.figure(figsize=(21,15))
+            plt.title('LPIPS (test dataset)')
+            plt.plot(self.train_info['lpips_mean'][1], label='mean')
+            plt.plot(np.array(self.train_info['lpips_mean'][1])+2*np.array(self.train_info['lpips_std'][1]), label='mean+2std')
+            plt.plot(np.array(self.train_info['lpips_mean'][1])-2*np.array(self.train_info['lpips_std'][1]), label='mean-2std')
+            plt.plot(self.train_info['lpips_min'][1], label='min')
+            plt.plot(self.train_info['lpips_max'][1], label='max')
+            plt.legend()
+            plt.savefig('progress/perception/LPIPS_epoch.png', bbox_inches='tight')
+            
+            plt.close('all')
+            
+            #save the models to intoduce resume capacity to training
+            self.G_AB.save("models/G_AB/G_AB_{}.h5".format(epoch))
+            self.G_BA.save("models/G_BA/G_BA_{}.h5".format(epoch))
+            self.E_A.save("models/E_A/E_A_{}.h5".format(epoch))
+            self.E_B.save("models/E_B/E_B_{}.h5".format(epoch))
+            self.D_A.save("models/D_A/D_A_{}.h5".format(epoch))
+            self.D_B.save("models/D_B/D_B_{}.h5".format(epoch))
+            self.D_Za.save("models/D_Za/D_Za_{}.h5".format(epoch))
+            self.D_Zb.save("models/D_Zb/D_Zb_{}.h5".format(epoch))
             
             
 model = AugCycleGAN((100,100,3), (1,1,4))

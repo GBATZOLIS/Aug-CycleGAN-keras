@@ -9,72 +9,141 @@ from data_loader import DataLoader
 import numpy as np
 import matplotlib.pyplot as plt
 from skimage.metrics import structural_similarity as ssim
+from lpips import lpips
+from glob import glob
+import tensorflow as tf
 
 
 class evaluator(object):
     def __init__(self, img_shape, latent_shape):
         self.img_shape = img_shape
-        self.latent_shape=latent_shape
+        self.latent_shape = latent_shape
+        self.latent_size = latent_shape[-1]
         self.data_loader = DataLoader(img_res=(self.img_shape[0], self.img_shape[1]))
         
+        #instantiate the LPIPS loss object (used as a perceptual loss)
+        self.lpips = lpips(self.img_shape)
+        self.lpips.create_model()
+        
+        
     def test(self, batch_size, num_out_imgs, training_point, test_type):
-        img_A, img_B = self.data_loader.load_paired_data(batch_size=batch_size)
         
-        fake_imgs_B = np.zeros((batch_size, num_out_imgs)+self.img_shape)
-        for j in range(batch_size):
-            fake_B = np.zeros((num_out_imgs,)+self.img_shape)
-            for i in range(num_out_imgs):
-                z_b = np.random.randn(1, 1, 1, self.latent_shape[-1])
-                fake_B[i] = self.model.predict([np.expand_dims(img_A[j],axis=0), z_b])
-            
-            fake_imgs_B[j] = fake_B
+        phone_paths = glob('data/testA/*')
+        dslr_paths = glob('data/testB/*')
+        random_indices = np.random.choice(len(phone_paths), batch_size)
+        phone_paths = [phone_paths[index] for index in random_indices]
+        dslr_paths = [dslr_paths[index] for index in random_indices]
         
-        if test_type == 'perception':
         
-            fig, axs = plt.subplots(batch_size, num_out_imgs+2, figsize=(21,15))
+        
+        if test_type=='perception':
+            distance_vals=np.zeros((len(phone_paths), num_out_imgs))
+            i=0
+            for phone_path, dslr_path in zip(phone_paths, dslr_paths):
+                x_true = plt.imread(phone_path).astype(np.float)
+                x_true = x_true/255
+                x = np.expand_dims(x_true, axis=0) #form needed to pass to the network 
+                x = tf.convert_to_tensor(x)
+                
+                y_true = plt.imread(dslr_path).astype(np.float)
+                y_true = y_true/255
+                y_true = np.expand_dims(y_true, axis=0)
+                y_true = tf.convert_to_tensor(y_true)
+                
+                with tf.device('/GPU:0'):
+                    self.lpips.set_reference(y_true)
+                    for j in range(num_out_imgs):
+                        z = tf.random.normal(shape=(1,1,1, self.latent_size))
+                        y_pred = self.model([x,z])
+                        distance_vals[i,j] = self.lpips.distance(y_pred)
+                i+=1
             
-            for j in range(batch_size):
-                for i in range(num_out_imgs+2):
-                    ax = axs[j,i]
-                    if i == 0:
-                        ax.imshow(img_A[j])
-                    elif i == num_out_imgs+1:
-                        ax.imshow(img_B[j])
-                    else:
-                        ax.imshow(fake_imgs_B[j,i-1])
+            info = {}
+            info['lpips_mean'] = np.mean(distance_vals)
+            info['lpips_std'] = np.std(distance_vals)
+            info['lpips_min'] = np.amin(distance_vals)
+            info['lpips_max'] = np.amax(distance_vals)
             
-            fig.savefig("progress/perception/perc_test_%s.png" % str(training_point), bbox_inches='tight')
-            plt.close("all")
-            
-            print('Perceptual test results have been successfully generated and saved in ../progress/perception/')
+            print('lpips_min: %.3f - lpips_mean : %.3f - lpips_max: %.3f - lpips_std: %.3f' % 
+                  (info['lpips_min'], info['lpips_mean'], info['lpips_max'], info['lpips_std']))
+            return info
+        
         
         elif test_type == 'distortion':
+            distance_vals=np.zeros((len(phone_paths), num_out_imgs))
+            i=0
+            for phone_path, dslr_path in zip(phone_paths, dslr_paths):
+                x_true = plt.imread(phone_path).astype(np.float)
+                x_true = x_true/255
+                x = np.expand_dims(x_true, axis=0) #form needed to pass to the network 
+                x = tf.convert_to_tensor(x)
+                y_true = plt.imread(dslr_path).astype(np.float)
+                y_true = y_true/255
+                for j in range(num_out_imgs):
+                    z = tf.random.normal(shape=(1,1,1, self.latent_size))
+                    y_pred = self.model([x,z])
+                    y_pred = tf.make_ndarray(y_pred)
+                    distance_vals[i,j] = ssim(y_pred[0],y_true, multichannel=True)
+                i+=1
             
-            avg_ssim = 0
-            avg_max_ssim = 0
-            avg_min_ssim = 0
-            for j in range(batch_size):
-                max_ssim = -100
-                min_ssim = 100
-                for i in range(num_out_imgs):
-                    ssim_value = ssim(img_B[j],fake_imgs_B[j,i],multichannel=True)
-                    
-                    if ssim_value>max_ssim:
-                        max_ssim = ssim_value
-                    
-                    if ssim_value<min_ssim:
-                        min_ssim = ssim_value
-                    
-                    avg_ssim += ssim_value
+            info = {}
+            info['ssim_mean'] = np.mean(distance_vals)
+            info['ssim_std'] = np.std(distance_vals)
+            info['ssim_min'] = np.amin(distance_vals)
+            info['ssim_max'] = np.amax(distance_vals)
+
+            print('ssim_min: %.3f - ssim_mean : %.3f - ssim_max: %.3f - ssim_std: %.3f' % 
+                  (info['ssim_min'], info['ssim_mean'], info['ssim_max'], info['ssim_std']))
+            return info
+        
+        elif test_type == 'mixed':
+            lpips_vals=np.zeros((len(phone_paths), num_out_imgs))
+            ssim_vals=np.zeros((len(phone_paths), num_out_imgs))
+            i=0
+            for phone_path, dslr_path in zip(phone_paths, dslr_paths):
+                x_true = plt.imread(phone_path).astype(np.float)
+                x_true = x_true/255
+                x = np.expand_dims(x_true, axis=0) #form needed to pass to the network 
+                x = tf.convert_to_tensor(x)
                 
-                avg_max_ssim+=max_ssim
-                avg_min_ssim+=min_ssim
-            
+                y_true = plt.imread(dslr_path).astype(np.float)
+                y_true = y_true/255
+                y_true_nd_array = np.expand_dims(y_true, axis=0)
+                y_true_tensor = tf.convert_to_tensor(y_true_nd_array)
                 
-            avg_max_ssim=avg_max_ssim/batch_size
-            avg_min_ssim=avg_min_ssim/batch_size
-            avg_ssim = avg_ssim/(batch_size*num_out_imgs)
+                with tf.device('/GPU:0'):
+                    self.lpips.set_reference(y_true_tensor)
+                    for j in range(num_out_imgs):
+                        z = tf.random.normal(shape=(1,1,1, self.latent_size))
+                        y_pred_tensor = self.model([x,z])
+                        lpips_vals[i,j] = self.lpips.distance(y_pred_tensor)
+                        
+                        y_pred_nd_array = np.array(y_pred_tensor)
+                        ssim_vals[i,j] = ssim(y_pred_nd_array[0],y_true_nd_array[0], multichannel=True)      
+                i+=1
             
-            print('Distortion test results have been obtained')
-            print('Mean SSIM: %.3f - Min SSIM: %.3f - Max SSIM: %.3f' % (avg_ssim, avg_min_ssim, avg_max_ssim))
-            return avg_ssim, avg_min_ssim, avg_max_ssim
+            info={}
+            
+            info['lpips_mean'] = np.mean(lpips_vals)
+            info['lpips_std'] = np.std(lpips_vals)
+            info['lpips_min'] = np.amin(lpips_vals)
+            info['lpips_max'] = np.amax(lpips_vals)
+            
+            print('lpips_min: %.3f - lpips_mean : %.3f - lpips_max: %.3f - lpips_std: %.3f' % 
+                  (info['lpips_min'], info['lpips_mean'], info['lpips_max'], info['lpips_std']))
+            
+            info['ssim_mean'] = np.mean(ssim_vals)
+            info['ssim_std'] = np.std(ssim_vals)
+            info['ssim_min'] = np.amin(ssim_vals)
+            info['ssim_max'] = np.amax(ssim_vals)
+            
+            print('ssim_min: %.3f - ssim_mean : %.3f - ssim_max: %.3f - ssim_std: %.3f' % 
+                  (info['ssim_min'], info['ssim_mean'], info['ssim_max'], info['ssim_std']))
+            
+            return info
+        
+        else:
+            return Exception('test type not valid')
+            
+            
+        

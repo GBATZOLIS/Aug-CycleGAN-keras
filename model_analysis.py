@@ -26,6 +26,7 @@ import numpy as np
 from skimage.metrics import structural_similarity as ssim
 from tqdm import tqdm
 from PIL import Image
+from lpips import lpips
 
 def get_random_patch(img, patch_dimension):
     if img.shape[0]==patch_dimension[0] and img.shape[1]==patch_dimension[1]:
@@ -52,15 +53,15 @@ def get_random_patch(img, patch_dimension):
 img_shape = (100,100,3)
 latent_shape=(1,1,2)
 
-model_name = 'G_AB_20_0.h5'
+model_name = 'G_AB_29_300.h5'
 
 model = G_AB(img_shape=img_shape, latent_shape=latent_shape) #define model architecture
 model.load_weights("models/%s" % (model_name)) #load the saved weights
 
-y_true = plt.imread('data/testA/833.jpg').astype(np.float)
+y_true = plt.imread('data/testA/38.jpg').astype(np.float)
 y_true = y_true/255
 
-x_true = plt.imread('data/testA/833.jpg').astype(np.float)
+x_true = plt.imread('data/testA/38.jpg').astype(np.float)
 #x_true = get_random_patch(x_true, (500,500))
 x_true = x_true/255
 x = np.expand_dims(x_true, axis=0)
@@ -105,7 +106,7 @@ images[0].save('progress/image.gif',
 
 
 z=np.zeros((1,1,1,2))
-z[0,0,0,:]=np.array([-0.0068,-1.583])
+z[0,0,0,:]=np.array([-0.79,-0.964])
 y_pred = model.predict([x,z])
 fig, axs = plt.subplots(1, 3)
 ax=axs[0]
@@ -171,6 +172,7 @@ images[0].save('progress/image.gif',
 
 
 
+"""
 #-----------------------------------------------------------------------
 #create a spiral around the mode
 a=0.02
@@ -210,25 +212,46 @@ images[0].save('progress/image.gif',
                save_all=True, append_images=images[::-1], optimize=False, duration=40, loop=0)
 #--------------------------------------------------------------------------------
 
+"""
 
 
+
+
+#--------------------------------------------------------------------
+
+"""
+import tensorflow as tf
+
+metric = lpips((100,100,3))
+metric.create_model()
+
+y_true = np.expand_dims(y_true, axis=0)
+y_true = tf.convert_to_tensor(y_true)
+metric.set_reference(y_true)  
 
 
 delta = 0.2
 z1 = np.arange(-3, 3, delta)
 z2 = np.arange(-3, 3, delta)
 SSIM = np.zeros((len(z1), len(z2)))
-for i in tqdm(range(len(z1))):
-    for j in range(len(z2)):
-        z = np.array([z1[i], z2[j]])
-        z=np.expand_dims(z, axis=0)
-        z=np.expand_dims(z, axis=0)
-        z=np.expand_dims(z, axis=0)
-        y_pred = model.predict([x,z])
-        SSIM[i,j] = ssim(y_pred[0],y_true, multichannel=True)
+
+x=tf.convert_to_tensor(x)
+with tf.device('/GPU:0'):
+    for i in tqdm(range(len(z1))):
+        for j in range(len(z2)):
+            z = np.array([z1[i], z2[j]])
+            z=np.expand_dims(z, axis=0)
+            z=np.expand_dims(z, axis=0)
+            z=np.expand_dims(z, axis=0)
+            z=tf.convert_to_tensor(z)
+            y_pred = model([x,z])
+            SSIM[i,j] = metric.distance(y_pred)
         
+            #SSIM[i,j] = ssim(y_pred[0],y_true, multichannel=True)
+  
+plt.figure()
 plt.contour(z1,z2,SSIM, levels=1000, cmap="RdBu_r")
 plt.colorbar()
-plt.plot(x_co, y_co, 'ko', ms=1)
+#plt.plot(x_co, y_co, 'ko', ms=1)
 
-
+"""

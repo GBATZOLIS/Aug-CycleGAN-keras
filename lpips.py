@@ -11,9 +11,6 @@ Created on Thu Apr  2 17:08:21 2020
 import tensorflow as tf
 from tensorflow.keras.applications.vgg19 import preprocess_input
 from tensorflow.keras.models import Model
-import matplotlib.pyplot as plt
-import numpy as np
-from tqdm import tqdm
 
 
 K = tf.keras.backend
@@ -96,22 +93,5 @@ class lpips(object):
             
             distance = K.get_value(distance)
             return distance
-    
-
-base_model = tf.keras.applications.VGG16(input_shape=(100,100,3), 
-                                                 include_top=False, 
-                                                 weights='imagenet')
-
-    
-"""
-metric = lpips((100,100,3))
-metric.create_model()
-metric.create_reference(tf.random.uniform((1,100,100,3)))
-
-for _ in tqdm(range(10000)):
-    print(metric.distance(tf.random.uniform((1,100,100,3))))
-    #print(metric.distance(tf.random.uniform((1,100,100,3)), tf.random.uniform((1,100,100,3))))
-
-"""
 
     
