@@ -103,12 +103,16 @@ class AugCycleGAN(object):
         with tf.GradientTape(persistent=True) as tape:
             z_a_hat = self.E_A([a,b], training=True)
             a_hat = self.G_BA([b,z_a_hat], training=True)
-            sup_loss_a = 0.2*L1_loss(a,a_hat)+self.lpips.distance(a,a_hat)
+            #sup_loss_a = 0.5*L1_loss(a,a_hat)+self.lpips.distance(a,a_hat)
+            #sup_loss_a = 0.5*L1_loss(a,a_hat)-0.5*tf.reduce_mean(tf.image.ssim(a,a_hat, max_val=1))
+            sup_loss_a = L1_loss(a,a_hat)+self.lpips.distance(a,a_hat)
             
             z_b_hat = self.E_B([a,b], training=True)
             b_hat = self.G_AB([a, z_b_hat], training=True)
-            sup_loss_b = 0.2*L1_loss(b,b_hat)+self.lpips.distance(b,b_hat)
-                
+            #sup_loss_b = 0.5*L1_loss(b,b_hat)+self.lpips.distance(b,b_hat)
+            #sup_loss_b = 0.5*L1_loss(b,b_hat)-0.5*tf.reduce_mean(tf.image.ssim(a,a_hat, max_val=1))
+            sup_loss_b = L1_loss(b,b_hat)+self.lpips.distance(b,b_hat)
+   
         
         #supervised loss a
         G_BA_grads = tape.gradient(sup_loss_a, self.G_BA.trainable_variables)
@@ -132,18 +136,21 @@ class AugCycleGAN(object):
         with tf.GradientTape(persistent=True) as tape:
             b_hat = self.G_AB([a, z_b], training=True)
             fake_b = self.D_B(b_hat, training=True)
+
+            b_hat_blur=self.blurring(b_hat, training=False)
+            a_blur = self.blurring(a, training=False)
             
             z_a_hat = self.E_A([a, b_hat], training=True)
             fake_z_a = self.D_Za(z_a_hat, training=True)
     
-    		#2nd map
+    	    #2nd map
             a_cyc = self.G_BA([b_hat, z_a_hat], training=True)
             z_b_cyc = self.E_B([a, b_hat], training=True)
         
             D_B_loss = discriminator_loss(self.D_B(b, training=True), fake_b)
             D_Za_loss = discriminator_loss(self.D_Za(z_a, training=True), fake_z_a)
             
-            cycle_A_Zb_loss = gen_loss(fake_b)+gen_loss(fake_z_a)+L1_loss(a_cyc,a)+L1_loss(z_b_cyc,z_b)
+            cycle_A_Zb_loss = gen_loss(fake_b)+gen_loss(fake_z_a)+L1_loss(a_cyc,a)+L1_loss(z_b_cyc,z_b)+L1_loss(a_blur, b_hat_blur)
 
         D_B_grads = tape.gradient(D_B_loss, self.D_B.trainable_variables)
         self.D_B_opt.apply_gradients(zip(D_B_grads, self.D_B.trainable_variables))
@@ -172,7 +179,10 @@ class AugCycleGAN(object):
         with tf.GradientTape(persistent=True) as tape:
             a_hat = self.G_BA([b, z_a], training=True)
             fake_a = self.D_A(a_hat, training=True)
-            
+
+            a_hat_blur=self.blurring(a_hat, training=False)
+            b_blur = self.blurring(b, training=False)
+
             z_b_hat = self.E_B([a_hat, b], training=True)
             fake_z_b = self.D_Zb(z_b_hat, training=True)
 			
@@ -183,7 +193,7 @@ class AugCycleGAN(object):
             D_A_loss = discriminator_loss(self.D_A(a, training=True), fake_a)
             D_Zb_loss = discriminator_loss(self.D_Zb(z_b, training=True), fake_z_b)
             
-            cycle_B_Za_loss = gen_loss(fake_a)+gen_loss(fake_z_b)+L1_loss(b_cyc,b)+L1_loss(z_a_cyc,z_a)
+            cycle_B_Za_loss = gen_loss(fake_a)+gen_loss(fake_z_b)+L1_loss(b_cyc,b)+L1_loss(z_a_cyc,z_a)+L1_loss(b_blur,a_hat_blur)
 
         D_A_grads = tape.gradient(D_A_loss, self.D_A.trainable_variables)
         self.D_A_opt.apply_gradients(zip(D_A_grads, self.D_A.trainable_variables))
@@ -216,12 +226,16 @@ class AugCycleGAN(object):
         dynamic_evaluator = evaluator(self.img_shape, self.latent_shape)
         for epoch in range(epochs):
             for batch, (img_A, img_B, sup_img_A, sup_img_B) in enumerate(self.data_loader.load_batch(batch_size)):
-                
+                img_A = tf.convert_to_tensor(img_A, dtype=tf.float32)
+                img_B = tf.convert_to_tensor(img_B, dtype=tf.float32)
+                sup_img_A = tf.convert_to_tensor(sup_img_A, dtype=tf.float32)
+                sup_img_B = tf.convert_to_tensor(sup_img_B, dtype=tf.float32)
+    
                 #generate the noise vectors from the N(0,sigma^2) distribution
                 
-                for i in range(4):
-                    z_a = np.random.randn(batch_size, 1, 1, self.latent_shape[-1])
-                    z_b = np.random.randn(batch_size, 1, 1, self.latent_shape[-1])
+                for i in range(2):
+                    z_a = tf.random.normal((batch_size, 1, 1, self.latent_shape[-1]), dtype=tf.float32)
+                    z_b = tf.random.normal((batch_size, 1, 1, self.latent_shape[-1]), dtype=tf.float32)
                     
                     D_B_loss, D_Za_loss, cycle_A_Zb_loss = self.step_cycle_A(img_A, img_B, z_a, z_b)
                     D_A_loss, D_Zb_loss, cycle_B_Za_loss = self.step_cycle_B(img_A, img_B, z_a, z_b)
@@ -235,13 +249,12 @@ class AugCycleGAN(object):
                          'cyc_A_Zb', cycle_A_Zb_loss, 'cyc_B_Za', cycle_B_Za_loss,
                          'sup_a', sup_a, 'sup_b', sup_b, elapsed_time))
 
-                if batch % 3 == 0 and not(batch==0 and epoch==0):
-                    training_point = np.around(epoch+batch/self.data_loader.n_batches, 3)
+                if batch % 50 == 0 and not(batch==0 and epoch==0):
+                    training_point = np.around(epoch+batch/self.data_loader.n_batches, 4)
                     self.train_info['eval_points'].append(training_point)
-                    print(self.train_info['eval_points'])
                     dynamic_evaluator.model = self.G_AB
                     #Perception and distortion evaluation
-                    info = dynamic_evaluator.test(batch_size=10, num_out_imgs=10, training_point=training_point, test_type='mixed')
+                    info = dynamic_evaluator.test(batch_size=100, num_out_imgs=10, training_point=training_point, test_type='mixed')
                     
                     
                     self.train_info['ssim_mean'][0].append(info['ssim_mean'])
@@ -336,8 +349,8 @@ class AugCycleGAN(object):
             self.D_Zb.save("models/D_Zb/D_Zb_{}.h5".format(epoch))
             
             
-model = AugCycleGAN((100,100,3), (1,1,4))
-model.train(epochs=10, batch_size = 1)
+model = AugCycleGAN((100,100,3), (1,1,16))
+model.train(epochs=100, batch_size = 1)
 
 
 

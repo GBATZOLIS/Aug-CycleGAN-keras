@@ -40,7 +40,7 @@ class DataLoader():
         
     def load_data(self, domain, patch_dimension=None, batch_size=1, is_testing=False):
         data_type = r"train%s" % domain if not is_testing else "test%s" % domain
-        path = glob(r'data/%s/*' % (data_type))
+        path = glob(r'data/%s/*.jpg' % (data_type))
         batch_images = np.random.choice(path, size=batch_size)
         
         if patch_dimension==None:
@@ -62,11 +62,11 @@ class DataLoader():
         #This is likely to cause memory issues. This needs to be resolved later
         
         if is_testing:
-            phone_paths = glob('data/testA/*')
-            dslr_paths = glob('data/testB/*')
+            phone_paths = glob('data/testA/*.jpg')
+            dslr_paths = glob('data/testB/*.jpg')
         else:
-            phone_paths = glob('data/trainA/*')
-            dslr_paths = glob('data/trainB/*')
+            phone_paths = glob('data/trainA/*.jpg')
+            dslr_paths = glob('data/trainB/*.jpg')
             
         if batch_size:
             random_indices = np.random.choice(len(phone_paths), batch_size)
@@ -89,14 +89,14 @@ class DataLoader():
     
     def load_batch(self, batch_size=1, is_testing=False):
         data_type = "train" if not is_testing else "val"
-        sup_path_A = glob(r'data/%sA/*' % (data_type))
-        sup_path_B = glob(r'data/%sB/*' % (data_type))
+        sup_path_A = glob(r'data/%sA/*.jpg' % (data_type))
+        sup_path_B = glob(r'data/%sB/*.jpg' % (data_type))
 
-        path_A=sup_path_A[0:10000]
-        path_B=sup_path_B[0:10000]
+        path_A=sup_path_A[0:20000]
+        path_B=sup_path_B[0:20000]
         
-        sup_path_A = sup_path_A[10000:20000]
-        sup_path_B = sup_path_B[10000:20000]
+        sup_path_A = sup_path_A[20000:40000]
+        sup_path_B = sup_path_B[20000:40000]
 
         self.n_batches = int(min(len(path_A), len(path_B)) / batch_size)
         total_samples = self.n_batches * batch_size

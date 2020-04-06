@@ -28,8 +28,8 @@ class evaluator(object):
         
     def test(self, batch_size, num_out_imgs, training_point, test_type):
         
-        phone_paths = glob('data/testA/*')
-        dslr_paths = glob('data/testB/*')
+        phone_paths = glob('data/testA/*.jpg')
+        dslr_paths = glob('data/testB/*.jpg')
         random_indices = np.random.choice(len(phone_paths), batch_size)
         phone_paths = [phone_paths[index] for index in random_indices]
         dslr_paths = [dslr_paths[index] for index in random_indices]

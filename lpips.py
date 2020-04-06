@@ -75,23 +75,44 @@ class lpips(object):
             return distance
                 
         else:
-            tensors = tf.concat([tensor1, reference], 0)
-            tensors = tensors*255
-            tensors = preprocess_input(tensors)
-            out_tensors = self.model(tensors)
-            
-            distance=0
-            for tensors in out_tensors:
-                H=tensors.shape[1]
-                W=tensors.shape[2]
+            #check if batch_size of tensor1 and reference are compatible
+            if tensor1.shape!=reference.shape:
+                return Exception('Input tensor with incompatible shapes')
+            else:
+                batch_size = tensor1.shape[0]
+                total_distance=0
+                for i in range(batch_size):
+                    tensors = tf.stack([tensor1[i], reference[i]])
+                    #print(tensors.shape)
+                    tensors = tensors*255
+                    tensors = preprocess_input(tensors)
+                    out_tensors = self.model(tensors)
+                    
+                    distance=0
+                    for tensors in out_tensors:
+                        H=tensors.shape[1]
+                        W=tensors.shape[2]
+                        
+                        tensors,_ = tf.linalg.normalize(tensors, axis=-1)
+                        diff_tensor = tf.math.squared_difference(tensors[0],tensors[1])
+                        collapsed_sum = tf.reduce_sum(diff_tensor)
+                        collapsed_sum_scaled = collapsed_sum/(H*W)
+                        distance+=collapsed_sum_scaled
+                    
+                    distance = K.get_value(distance)
+                    
+                    total_distance+=distance
                 
-                tensors,_ = tf.linalg.normalize(tensors, axis=-1)
-                diff_tensor = tf.math.squared_difference(tensors[0], tensors[1])
-                collapsed_sum = tf.reduce_sum(diff_tensor)
-                collapsed_sum_scaled = collapsed_sum/(H*W)
-                distance+=collapsed_sum_scaled
-            
-            distance = K.get_value(distance)
-            return distance
+                total_distance=total_distance/batch_size
+                return total_distance
 
-    
+
+"""
+
+metric=lpips((100,100,3))
+
+x1 = tf.random.normal((5,100,100,3), dtype=tf.float32)
+x2 = tf.random.normal((5,100,100,3), dtype=tf.float32)
+
+print(metric.distance(x1,x2))
+"""
