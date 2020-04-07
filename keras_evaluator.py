@@ -109,7 +109,7 @@ class evaluator(object):
                 y_true = plt.imread(dslr_path).astype(np.float)
                 y_true = y_true/255
                 y_true_nd_array = np.expand_dims(y_true, axis=0)
-                y_true_tensor = tf.convert_to_tensor(y_true_nd_array)
+                y_true_tensor = tf.convert_to_tensor(y_true_nd_array, dtype=tf.float32)
                 
                 with tf.device('/GPU:0'):
                     self.lpips.set_reference(y_true_tensor)
@@ -126,19 +126,15 @@ class evaluator(object):
             
             info['lpips_mean'] = np.mean(lpips_vals)
             info['lpips_std'] = np.std(lpips_vals)
-            info['lpips_min'] = np.amin(lpips_vals)
-            info['lpips_max'] = np.amax(lpips_vals)
             
-            print('lpips_min: %.3f - lpips_mean : %.3f - lpips_max: %.3f - lpips_std: %.3f' % 
-                  (info['lpips_min'], info['lpips_mean'], info['lpips_max'], info['lpips_std']))
+            print('lpips_mean : %.3f - lpips_std: %.3f' % 
+                  (info['lpips_mean'], info['lpips_std']))
             
             info['ssim_mean'] = np.mean(ssim_vals)
             info['ssim_std'] = np.std(ssim_vals)
-            info['ssim_min'] = np.amin(ssim_vals)
-            info['ssim_max'] = np.amax(ssim_vals)
             
-            print('ssim_min: %.3f - ssim_mean : %.3f - ssim_max: %.3f - ssim_std: %.3f' % 
-                  (info['ssim_min'], info['ssim_mean'], info['ssim_max'], info['ssim_std']))
+            print('ssim_mean : %.3f - ssim_std: %.3f' % 
+                  (info['ssim_mean'], info['ssim_std']))
             
             return info
         
