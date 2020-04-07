@@ -13,6 +13,11 @@ Created on Fri Feb 28 17:04:32 2020
 #laod required modules
 import datetime
 import numpy as np
+import os
+import pickle
+import shutil
+from glob import glob
+from zipfile import ZipFile
 
 #load functions and classes from other .py files within the repository
 from data_loader import DataLoader
@@ -34,6 +39,8 @@ from lpips import lpips
 
 #visualisation packages
 import matplotlib.pyplot as plt
+
+
   
 def discriminator_loss(real, generated):
     # Multiplied by 0.5 so that it will train at half-speed
@@ -289,111 +296,163 @@ class AugCycleGAN(object):
         self.E_B_opt.apply_gradients(zip(E_B_grads, self.E_B.trainable_variables))
         
         return D_A_loss, D_Zb_loss, cycle_B_Za_loss
-            
+    
+    def save_models(self,epoch):
+        
+        #save the models to intoduce resume capacity to training
+        self.G_AB.save("models/G_AB/G_AB_{}.h5".format(epoch))
+        self.G_BA.save("models/G_BA/G_BA_{}.h5".format(epoch))
+        self.E_A.save("models/E_A/E_A_{}.h5".format(epoch))
+        self.E_B.save("models/E_B/E_B_{}.h5".format(epoch))
+        self.D_A.save("models/D_A/D_A_{}.h5".format(epoch))
+        self.D_B.save("models/D_B/D_B_{}.h5".format(epoch))
+        self.D_Za.save("models/D_Za/D_Za_{}.h5".format(epoch))
+        self.D_Zb.save("models/D_Zb/D_Zb_{}.h5".format(epoch))
+    
+    def delete_models(self,directories):
+        for directory in directories:
+            os.remove(directory)
+        
     def train(self, epochs, batch_size=10, sample_interval=50):
         start_time = datetime.datetime.now()
         def chop_microseconds(delta):
             #utility to help avoid printing the microseconds
             return delta - datetime.timedelta(microseconds=delta.microseconds)
         
-        #create a dynamic evaluator object
-        dynamic_evaluator = evaluator(self.img_shape, self.latent_shape)
-        for epoch in range(epochs):
-            for batch, (img_A, img_B, sup_img_A, sup_img_B) in enumerate(self.data_loader.load_batch(batch_size)):
-                img_A = tf.convert_to_tensor(img_A, dtype=tf.float32)
-                img_B = tf.convert_to_tensor(img_B, dtype=tf.float32)
-                sup_img_A = tf.convert_to_tensor(sup_img_A, dtype=tf.float32)
-                sup_img_B = tf.convert_to_tensor(sup_img_B, dtype=tf.float32)
+        try:
+            #create a dynamic evaluator object
+            dynamic_evaluator = evaluator(self.img_shape, self.latent_shape)
+            for epoch in range(epochs):
+                for batch, (img_A, img_B, sup_img_A, sup_img_B) in enumerate(self.data_loader.load_batch(batch_size)):
+                    img_A = tf.convert_to_tensor(img_A, dtype=tf.float32)
+                    img_B = tf.convert_to_tensor(img_B, dtype=tf.float32)
+                    sup_img_A = tf.convert_to_tensor(sup_img_A, dtype=tf.float32)
+                    sup_img_B = tf.convert_to_tensor(sup_img_B, dtype=tf.float32)
+        
+                    #generate the noise vectors from the N(0,sigma^2) distribution
+                    
+                    for i in range(2):
+                        z_a = tf.random.normal((batch_size, 1, 1, self.latent_shape[-1]), dtype=tf.float32)
+                        z_b = tf.random.normal((batch_size, 1, 1, self.latent_shape[-1]), dtype=tf.float32)
+                        
+                        D_B_loss, D_Za_loss, cycle_A_Zb_loss = self.step_cycle_A(img_A, img_B, z_a, z_b)
+                        D_A_loss, D_Zb_loss, cycle_B_Za_loss = self.step_cycle_B(img_A, img_B, z_a, z_b)
+                    
+                    sup_a, sup_b = self.supervised_step(sup_img_A, sup_img_B)
+                    
+                    elapsed_time = chop_microseconds(datetime.datetime.now() - start_time)
+                    print('[%d/%d][%d/%d]-[%s:%.3f %s:%.3f %s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f]-[time:%s]'
+                          % (epoch, epochs, batch, self.data_loader.n_batches,
+                             'D_A', D_A_loss, 'D_B', D_B_loss, 'D_Za', D_Za_loss, 'D_Zb', D_Zb_loss,
+                             'cyc_A_Zb', cycle_A_Zb_loss, 'cyc_B_Za', cycle_B_Za_loss,
+                             'sup_a', sup_a, 'sup_b', sup_b, elapsed_time))
     
-                #generate the noise vectors from the N(0,sigma^2) distribution
+                    if batch % 50 == 0 and not(batch==0 and epoch==0):
+                        training_point = np.around(epoch+batch/self.data_loader.n_batches, 4)
+                        self.train_info['performance']['eval_points'].append(training_point)
+                        dynamic_evaluator.model = self.G_AB
+                        #Perception and distortion evaluation
+                        info = dynamic_evaluator.test(batch_size=100, num_out_imgs=10, training_point=training_point, test_type='mixed')
+                        
+                        
+                        self.train_info['performance']['ssim_mean'][0].append(info['ssim_mean'])
+                        self.train_info['performance']['ssim_std'][0].append(info['ssim_std'])
+                        self.train_info['performance']['lpips_mean'][0].append(info['lpips_mean'])
+                        self.train_info['performance']['lpips_std'][0].append(info['lpips_std'])
+                        
+                        plt.figure(figsize=(21,15))
+                        plt.title('SSIM (100x10)')
+                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['ssim_mean'][0], label='mean')
+                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['ssim_std'][0], label='std')
+                        plt.legend()
+                        plt.savefig('progress/distortion/SSIM.png', bbox_inches='tight')
+                        
+                        
+                        plt.figure(figsize=(21,15))
+                        plt.title('LPIPS (100x10)')
+                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['lpips_mean'][0], label='mean')
+                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['lpips_std'][0], label='std')
+                        plt.legend()
+                        plt.savefig('progress/perception/LPIPS.png', bbox_inches='tight')
+                        plt.close('all')
+                        
+                        
+                        #save the generators
+                        self.G_AB.save("models/G_AB_all/G_AB_{}_{}.h5".format(epoch, batch))
+                        #save the tensorboard values
+                        with open('progress/training_information/'+ 'train_info' + '.pkl', 'wb') as f:
+                            pickle.dump(self.train_info, f, pickle.HIGHEST_PROTOCOL)
                 
-                for i in range(2):
-                    z_a = tf.random.normal((batch_size, 1, 1, self.latent_shape[-1]), dtype=tf.float32)
-                    z_b = tf.random.normal((batch_size, 1, 1, self.latent_shape[-1]), dtype=tf.float32)
-                    
-                    D_B_loss, D_Za_loss, cycle_A_Zb_loss = self.step_cycle_A(img_A, img_B, z_a, z_b)
-                    D_A_loss, D_Zb_loss, cycle_B_Za_loss = self.step_cycle_B(img_A, img_B, z_a, z_b)
                 
-                sup_a, sup_b = self.supervised_step(sup_img_A, sup_img_B)
                 
-                elapsed_time = chop_microseconds(datetime.datetime.now() - start_time)
-                print('[%d/%d][%d/%d]-[%s:%.3f %s:%.3f %s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f]-[time:%s]'
-                      % (epoch, epochs, batch, self.data_loader.n_batches,
-                         'D_A', D_A_loss, 'D_B', D_B_loss, 'D_Za', D_Za_loss, 'D_Zb', D_Zb_loss,
-                         'cyc_A_Zb', cycle_A_Zb_loss, 'cyc_B_Za', cycle_B_Za_loss,
-                         'sup_a', sup_a, 'sup_b', sup_b, elapsed_time))
-
-                if batch % 50 == 0 and not(batch==0 and epoch==0):
-                    training_point = np.around(epoch+batch/self.data_loader.n_batches, 4)
-                    self.train_info['performance']['eval_points'].append(training_point)
-                    dynamic_evaluator.model = self.G_AB
-                    #Perception and distortion evaluation
-                    info = dynamic_evaluator.test(batch_size=100, num_out_imgs=10, training_point=training_point, test_type='mixed')
-                    
-                    
-                    self.train_info['performance']['ssim_mean'][0].append(info['ssim_mean'])
-                    self.train_info['performance']['ssim_std'][0].append(info['ssim_std'])
-                    self.train_info['performance']['lpips_mean'][0].append(info['lpips_mean'])
-                    self.train_info['performance']['lpips_std'][0].append(info['lpips_std'])
-                    
-                    plt.figure(figsize=(21,15))
-                    plt.title('SSIM (100x10)')
-                    plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['ssim_mean'][0], label='mean')
-                    plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['ssim_std'][0], label='std')
-                    plt.legend()
-                    plt.savefig('progress/distortion/SSIM.png', bbox_inches='tight')
-                    
-                    
-                    plt.figure(figsize=(21,15))
-                    plt.title('LPIPS (100x10)')
-                    plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['lpips_mean'][0], label='mean')
-                    plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['lpips_std'][0], label='std')
-                    plt.legend()
-                    plt.savefig('progress/perception/LPIPS.png', bbox_inches='tight')
-                    plt.close('all')
-                    
-                    
-                    #save the generators
-                    self.G_AB.save("models/G_AB_{}_{}.h5".format(epoch, batch))
-                    #self.G_BA.save("models/G_BA_{}_{}.h5".format(epoch, batch))
+                dynamic_evaluator.model = self.G_AB #set the current G_AB model for evaluation
+                #Perception and distortion evaluation on the entire test dataset
+                info = dynamic_evaluator.test(batch_size=4000, num_out_imgs=10, training_point=training_point, test_type='mixed')
+                
+                self.train_info['performance']['ssim_mean'][1].append(info['ssim_mean'])
+                self.train_info['performance']['ssim_std'][1].append(info['ssim_std'])
+                
+                self.train_info['performance']['lpips_mean'][1].append(info['lpips_mean'])
+                self.train_info['performance']['lpips_std'][1].append(info['lpips_std'])
+                
+                plt.figure(figsize=(21,15))
+                plt.title('SSIM (test dataset)')
+                plt.plot(self.train_info['performance']['ssim_mean'][1], label='mean')
+                plt.plot(self.train_info['performance']['ssim_std'][1], label='std')
+                plt.legend()
+                plt.savefig('progress/distortion/SSIM_epoch.png', bbox_inches='tight')
+                
+                
+                plt.figure(figsize=(21,15))
+                plt.title('LPIPS (test dataset)')
+                plt.plot(self.train_info['performance']['lpips_mean'][1], label='mean')
+                plt.plot(self.train_info['performance']['lpips_std'][1], label='std')
+                plt.legend()
+                plt.savefig('progress/perception/LPIPS_epoch.png', bbox_inches='tight')
+                plt.close('all')
+                
+                #save the models to intoduce resume capacity to training
+                self.save_models(epoch)
             
+        except KeyboardInterrupt:
+            print('Training has been terminated manually')
+            save = input("Should I save the training data?")
             
+            if save=='yes' or save=='y':
+                #Create a new directory under the run file to save the training information
+                now = datetime.datetime.now()
+                date_time = now.strftime("%m_%d_%Y__%H_%M_%S")
+                os.mkdir('runs/%s' % date_time)
+                #zip and save the models under '../runs/date_time/'
+                shutil.make_archive('runs/%s/models' % date_time, 'zip', 'models/')
+                shutil.make_archive('runs/%s/progress' % date_time, 'zip', 'progress/')
+                
+                #zip and save the code used
+                python_paths = glob('*.py')
+                with ZipFile('runs/%s/code.zip' % date_time, 'w') as code_writer:
+                    for path in python_paths:
+                        code_writer.write(path)
             
-            dynamic_evaluator.model = self.G_AB #set the current G_AB model for evaluation
-            #Perception and distortion evaluation on the entire test dataset
-            info = dynamic_evaluator.test(batch_size=4000, num_out_imgs=10, training_point=training_point, test_type='mixed')
+            #delete training data from repo main files
+            G_AB_paths = glob('models/G_AB/*.h5')
+            G_BA_paths = glob('models/G_BA/*.h5')
+            E_A_paths = glob('models/E_A/*.h5')
+            E_B_paths = glob('models/E_B/*.h5')
+            D_A_paths = glob('models/D_A/*.h5')
+            D_B_paths = glob('models/D_B/*.h5')
+            D_Za_paths = glob('models/D_Za/*.h5')
+            D_Zb_paths = glob('models/D_Zb/*.h5')
             
-            self.train_info['performance']['ssim_mean'][1].append(info['ssim_mean'])
-            self.train_info['performance']['ssim_std'][1].append(info['ssim_std'])
+            self.delete_models(G_AB_paths)
+            self.delete_models(G_BA_paths)
+            self.delete_models(E_A_paths)
+            self.delete_models(E_B_paths)
+            self.delete_models(D_A_paths)
+            self.delete_models(D_B_paths)
+            self.delete_models(D_Za_paths)
+            self.delete_models(D_Zb_paths)
             
-            self.train_info['performance']['lpips_mean'][1].append(info['lpips_mean'])
-            self.train_info['performance']['lpips_std'][1].append(info['lpips_std'])
-            
-            plt.figure(figsize=(21,15))
-            plt.title('SSIM (test dataset)')
-            plt.plot(self.train_info['performance']['ssim_mean'][1], label='mean')
-            plt.plot(self.train_info['performance']['ssim_std'][1], label='std')
-            plt.legend()
-            plt.savefig('progress/distortion/SSIM_epoch.png', bbox_inches='tight')
-            
-            
-            plt.figure(figsize=(21,15))
-            plt.title('LPIPS (test dataset)')
-            plt.plot(self.train_info['performance']['lpips_mean'][1], label='mean')
-            plt.plot(self.train_info['performance']['lpips_std'][1], label='std')
-            plt.legend()
-            plt.savefig('progress/perception/LPIPS_epoch.png', bbox_inches='tight')
-            plt.close('all')
-            
-            #save the models to intoduce resume capacity to training
-            self.G_AB.save("models/G_AB/G_AB_{}.h5".format(epoch))
-            self.G_BA.save("models/G_BA/G_BA_{}.h5".format(epoch))
-            self.E_A.save("models/E_A/E_A_{}.h5".format(epoch))
-            self.E_B.save("models/E_B/E_B_{}.h5".format(epoch))
-            self.D_A.save("models/D_A/D_A_{}.h5".format(epoch))
-            self.D_B.save("models/D_B/D_B_{}.h5".format(epoch))
-            self.D_Za.save("models/D_Za/D_Za_{}.h5".format(epoch))
-            self.D_Zb.save("models/D_Zb/D_Zb_{}.h5".format(epoch))
+                
             
             
 model = AugCycleGAN((100,100,3), (1,1,16))
