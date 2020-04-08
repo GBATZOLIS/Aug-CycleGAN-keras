@@ -187,11 +187,12 @@ class AugCycleGAN(object):
         with tf.GradientTape(persistent=True) as tape:
             #1st map
             b_hat = self.G_AB([a, z_b], training=True)
-            fake_b = self.D_B(b_hat, training=True)
-
             b_hat_blur=self.blurring(b_hat, training=False)
             a_blur = self.blurring(a, training=False)
             
+            b_hat_hf = tf.math.subtract(b_hat, b_hat_blur)
+            fake_b = self.D_B(b_hat_hf, training=True)
+
             z_a_hat = self.E_A([a, b_hat], training=True)
             fake_z_a = self.D_Za(z_a_hat, training=True)
     
@@ -200,7 +201,7 @@ class AugCycleGAN(object):
             z_b_cyc = self.E_B([a, b_hat], training=True)
         
             #---------------COMPUTE LOSSES-----------------------
-            D_B_loss = discriminator_loss(self.D_B(b, training=True), fake_b)
+            D_B_loss = discriminator_loss(self.D_B(tf.math.subtract(b, self.blurring(b, training=False)), training=True), fake_b)
             self.train_info['losses']['unsup']['D_B'].append(D_B_loss)
             
             D_Za_loss = discriminator_loss(self.D_Za(z_a, training=True), fake_z_a)
@@ -221,7 +222,9 @@ class AugCycleGAN(object):
             blur_ab = L1_loss(a_blur, b_hat_blur)
             self.train_info['losses']['unsup']['blur_ab'].append(blur_ab)
             
-            cycle_A_Zb_loss = adv_gen_B + adv_gen_Za + rec_a_dist + rec_Zb + blur_ab
+            lpips_ab = self.lpips.distance(a,b_hat) #make sure the high and low frequencies fit together
+            
+            cycle_A_Zb_loss = adv_gen_B + adv_gen_Za + rec_a_dist + rec_Zb + blur_ab + lpips_ab
 
         D_B_grads = tape.gradient(D_B_loss, self.D_B.trainable_variables)
         self.D_B_opt.apply_gradients(zip(D_B_grads, self.D_B.trainable_variables))
@@ -250,10 +253,11 @@ class AugCycleGAN(object):
         with tf.GradientTape(persistent=True) as tape:
             #1st map
             a_hat = self.G_BA([b, z_a], training=True)
-            fake_a = self.D_A(a_hat, training=True)
-
             a_hat_blur=self.blurring(a_hat, training=False)
             b_blur = self.blurring(b, training=False)
+            
+            a_hat_hf = tf.math.subtract(a_hat, a_hat_blur)
+            fake_a = self.D_A(a_hat_hf, training=True)
 
             z_b_hat = self.E_B([a_hat, b], training=True)
             fake_z_b = self.D_Zb(z_b_hat, training=True)
@@ -263,7 +267,7 @@ class AugCycleGAN(object):
             z_a_cyc = self.E_A([a_hat, b], training=True)
             
             #----------COMPUTE LOSSES-----------
-            D_A_loss = discriminator_loss(self.D_A(a, training=True), fake_a)
+            D_A_loss = discriminator_loss(self.D_A(tf.math.subtract(a, self.blurring(a, training=False)), training=True), fake_a)
             self.train_info['losses']['unsup']['D_A'].append(D_A_loss)
             
             D_Zb_loss = discriminator_loss(self.D_Zb(z_b, training=True), fake_z_b)
@@ -284,7 +288,9 @@ class AugCycleGAN(object):
             blur_ba = L1_loss(b_blur,a_hat_blur)
             self.train_info['losses']['unsup']['blur_ba'].append(blur_ba)
             
-            cycle_B_Za_loss = adv_gen_A + adv_gen_Zb + rec_b_dist + rec_Za + blur_ba
+            lpips_ba = self.lpips.distance(b,a_hat) #make sure the high and low frequencies fit together
+            
+            cycle_B_Za_loss = adv_gen_A + adv_gen_Zb + rec_b_dist + rec_Za + blur_ba + lpips_ba
 
         D_A_grads = tape.gradient(D_A_loss, self.D_A.trainable_variables)
         self.D_A_opt.apply_gradients(zip(D_A_grads, self.D_A.trainable_variables))
