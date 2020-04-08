@@ -28,7 +28,7 @@ from data_loader import DataLoader
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input
-
+from tensorflow.keras.models import load_model
 from keras_modules import blur
 from keras_networks import G_AB, G_BA, E_A, E_B, D_A, D_B, D_Za, D_Zb, N_map
 from keras_evaluator import evaluator
@@ -54,7 +54,7 @@ def L1_loss(image1, image2):
     return tf.reduce_mean(tf.abs(image1 - image2))
         
 class AugCycleGAN(object):
-    def __init__(self, img_shape, latent_shape):
+    def __init__(self, img_shape, latent_shape, resume=False):
         self.img_shape = img_shape
         self.latent_shape = latent_shape
         
@@ -123,6 +123,16 @@ class AugCycleGAN(object):
         self.D_Za = D_Za(latent_shape) 
         self.D_Zb = D_Zb(latent_shape)
         self.blurring = blur(img_shape)
+            
+        if resume==True:
+            self.G_AB.load_weights(glob('models/G_AB/*.h5')[-1])
+            self.G_BA.load_weights(glob('models/G_BA/*.h5')[-1])
+            self.E_A.load_weights(glob('models/E_A/*.h5')[-1])
+            self.E_B.load_weights(glob('models/E_B/*.h5')[-1])
+            self.D_A.load_weights(glob('models/D_A/*.h5')[-1])
+            self.D_B.load_weights(glob('models/D_B/*.h5')[-1])
+            self.D_Za.load_weights(glob('models/D_Za/*.h5')[-1])
+            self.D_Zb.load_weights(glob('models/D_Zb/*.h5')[-1])
         
         self.G_AB_opt = self.G_BA_opt = Adam(lr=0.0002, beta_1=0.5)
         self.D_A_opt = self.D_B_opt = Adam(lr=0.0002, beta_1=0.5)
@@ -433,29 +443,32 @@ class AugCycleGAN(object):
                     for path in python_paths:
                         code_writer.write(path)
             
-            #delete training data from repo main files
-            G_AB_paths = glob('models/G_AB/*.h5')
-            G_BA_paths = glob('models/G_BA/*.h5')
-            E_A_paths = glob('models/E_A/*.h5')
-            E_B_paths = glob('models/E_B/*.h5')
-            D_A_paths = glob('models/D_A/*.h5')
-            D_B_paths = glob('models/D_B/*.h5')
-            D_Za_paths = glob('models/D_Za/*.h5')
-            D_Zb_paths = glob('models/D_Zb/*.h5')
+            clean = input("Should I clean the repository?")
             
-            self.delete_models(G_AB_paths)
-            self.delete_models(G_BA_paths)
-            self.delete_models(E_A_paths)
-            self.delete_models(E_B_paths)
-            self.delete_models(D_A_paths)
-            self.delete_models(D_B_paths)
-            self.delete_models(D_Za_paths)
-            self.delete_models(D_Zb_paths)
+            if clean=='y' or clean=='yes':
+                #delete training data from repo main files
+                G_AB_paths = glob('models/G_AB/*.h5')
+                G_BA_paths = glob('models/G_BA/*.h5')
+                E_A_paths = glob('models/E_A/*.h5')
+                E_B_paths = glob('models/E_B/*.h5')
+                D_A_paths = glob('models/D_A/*.h5')
+                D_B_paths = glob('models/D_B/*.h5')
+                D_Za_paths = glob('models/D_Za/*.h5')
+                D_Zb_paths = glob('models/D_Zb/*.h5')
+                
+                self.delete_models(G_AB_paths)
+                self.delete_models(G_BA_paths)
+                self.delete_models(E_A_paths)
+                self.delete_models(E_B_paths)
+                self.delete_models(D_A_paths)
+                self.delete_models(D_B_paths)
+                self.delete_models(D_Za_paths)
+                self.delete_models(D_Zb_paths)
             
                 
             
             
-model = AugCycleGAN((100,100,3), (1,1,16))
+model = AugCycleGAN((100,100,3), (1,1,4), resume=True)
 model.train(epochs=100, batch_size = 1)
 
 
