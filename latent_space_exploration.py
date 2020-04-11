@@ -29,7 +29,7 @@ from lpips import lpips
   
 #Search Phase inspired by Brownian motion and repel dynamics
 class SwarmOptimiser(object):
-    def __init__(self, n, lo_range, up_range, search_duration, swarms_factor, func):
+    def __init__(self, n, lo_range, up_range, func, search_duration=None, swarms_factor=None):
         self.n = n
         self.lower_range = lo_range
         self.upper_range = up_range
@@ -39,18 +39,24 @@ class SwarmOptimiser(object):
         #Search Phase variables
         self.M = search_duration
         self.c = swarms_factor
-        self.swarms = self.c**self.n
-        self.swarm_positions = np.zeros((self.M, self.swarms, self.n))
-        self.swarm_velocities = np.zeros((self.M, self.swarms, self.n))
-        self.swarm_accelerations = np.zeros((self.M, self.swarms, self.n))
         
+        if self.c !=None and self.M!=None:
+            self.swarms = self.c**self.n
+            self.swarm_positions = np.zeros((self.M, self.swarms, self.n))
+            self.swarm_velocities = np.zeros((self.M, self.swarms, self.n))
+            self.swarm_accelerations = np.zeros((self.M, self.swarms, self.n))
+            #PSO algorithm variables
+            self.pi_arr = np.zeros((self.swarms,self.n))
+            self.pi_cost_vals = np.zeros(self.swarms)
         
-        #PSO algorithm variables
-        self.pi_arr = np.zeros((self.swarms,self.n))
-        self.pi_cost_vals = np.zeros(self.swarms)
+        else:
+            self.swarms=self.n
+        
+       
         self.g = np.zeros(self.n)
         self.g_cost = 10**9
         
+        #set the optimising funvtion
         self.func = func
         
         #create a gif for the latent starting at zero
@@ -198,16 +204,19 @@ class SwarmOptimiser(object):
         #PARTICLE SWARM OPTIMISATION
         #initialisation
         
-        pso_swarms_positions = np.zeros((1000//self.swarms+10, self.swarms, self.n))
-        pso_swarms_velocities = np.zeros((1000//self.swarms+10, self.swarms, self.n))
+        pso_swarms_positions = np.zeros((2500//self.swarms+10, self.swarms, self.n))
+        pso_swarms_velocities = np.zeros((2500//self.swarms+10, self.swarms, self.n))
         
-        search_phase=True
+        search_phase=False
         if search_phase==True:
             for i in range(self.swarms):
                 pso_swarms_positions[0, i, :] = self.pi_arr[i, :]
                 pso_swarms_velocities[0, i, :] = 0
                 #pso_swarms_velocities[0, i, :] = np.multiply(2*(self.upper_range - self.lower_range) , np.random.rand(n)) - self.upper_range + self.lower_range
         else:
+            
+            self.pi_arr = np.zeros((self.swarms,self.n))
+            self.pi_cost_vals = np.zeros(self.swarms)
             for i in range(self.swarms):
                 random_position = np.multiply(self.upper_range-self.lower_range, np.random.rand(self.n)) + self.lower_range
                 pso_swarms_positions[0, i, :] = random_position
@@ -224,9 +233,9 @@ class SwarmOptimiser(object):
         phi_g = 0.75
         omega=0.9
         it=1
-        while self.func_evals<1000:
-           #print("iteration: ", it)
-           #print(self.func_evals)
+        while self.func_evals<2500:
+           print("iteration: ", it)
+           print(self.func_evals)
            for i in range(self.swarms):
                for d in range(self.n):
                    rp = np.random.rand()
@@ -239,7 +248,8 @@ class SwarmOptimiser(object):
                self.func_evals+=1
                
                if i==0:
-                   self.images.append(frame) #add the frame to the gif
+                   for _ in range(1):
+                       self.images.append(frame) #add the frame to the gif
                
               
                if  cost_eval_i < self.pi_cost_vals[i]:
@@ -251,7 +261,13 @@ class SwarmOptimiser(object):
                           self.g_cost = self.pi_cost_vals[i]
            it+=1
         
-        """
+        #append the last frame 10 more times
+        converged_frame = self.images[-1]
+        for _ in range(30):
+            self.images.append(converged_frame)
+        
+        
+        
         if self.n == 2:
             plt.figure()
             xi = np.linspace(-3, 3, 20)
@@ -263,7 +279,7 @@ class SwarmOptimiser(object):
                     zi[i,j],_ = self.func(np.array([Xi[i,j], Yi[i,j]]))
             plt.contourf(xi, yi, zi, levels=14, cmap="RdBu_r")
             plt.plot(pso_swarms_positions[:, 0, 0], pso_swarms_positions[:, 0, 1])
-        """
+        
         
         return self.g, self.g_cost
 
@@ -322,7 +338,7 @@ class latent_explorer(object):
         upper_range = 3*np.ones(n)
         M=50 #duration of the search phase (number of iterations in search phase)
         c=3 #determine how many swarms are injected to the domain. swarms_factor^
-        sw_optimiser = SwarmOptimiser(n, lower_range, upper_range, M, c, func)
+        sw_optimiser = SwarmOptimiser(n, lower_range, upper_range,func, M, c)
         sw_optimiser.initialise_swarm_positions()
         sw_optimiser.search_space()
         min_val, cost = sw_optimiser.PSO()
@@ -332,6 +348,23 @@ class latent_explorer(object):
 
 latent_exp = latent_explorer((100,100,3), 2)
 
+i=1176
+
+x_true = plt.imread('data/testA/%s.jpg'% str(i)).astype(np.float)
+x_true = x_true/255
+x = np.expand_dims(x_true, axis=0)
+    
+y_true = plt.imread('data/testB/%s.jpg'% str(i)).astype(np.float)
+y_true = y_true/255
+    
+opt_loc, opt_value=latent_exp.mode_search(x,y_true)
+
+latent_exp.gif_images[0].save('progress/gif/lpips/%s_%s.gif'%(str(i), 'lpips'),
+                                        save_all=True, 
+                                        append_images=latent_exp.gif_images, 
+                                        optimize=False, duration=100, loop=0)  
+
+"""
 info={}
 for i in tqdm(range(2000)):
     info[i]={}
@@ -351,7 +384,7 @@ for i in tqdm(range(2000)):
                                         append_images=latent_exp.gif_images, 
                                         optimize=False, duration=150, loop=1)
 
-
+"""
 
 #print('optimal location: ', min_val)
 #print('optimal value: ', cost)
