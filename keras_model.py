@@ -155,24 +155,24 @@ class AugCycleGAN(object):
             a_hat = self.G_BA([b,z_a_hat], training=True)
             #sup_loss_a = 0.5*L1_loss(a,a_hat)-0.5*tf.reduce_mean(tf.image.ssim(a,a_hat, max_val=1))
             
-            sup_perc_a = self.lpips.distance(a,a_hat)
-            self.train_info['losses']['sup']['perc_a'].append(sup_perc_a)
+            #sup_perc_a = self.lpips.distance(a,a_hat)
+            #self.train_info['losses']['sup']['perc_a'].append(sup_perc_a)
             
             sup_dist_a = L1_loss(a,a_hat)
             self.train_info['losses']['sup']['dist_a'].append(sup_dist_a)
             
-            sup_loss_a = sup_dist_a+sup_perc_a
+            sup_loss_a = sup_dist_a
             
             z_b_hat = self.E_B([a,b], training=True)
             b_hat = self.G_AB([a, z_b_hat], training=True)
             #sup_loss_b = 0.5*L1_loss(b,b_hat)-0.5*tf.reduce_mean(tf.image.ssim(a,a_hat, max_val=1))
-            sup_perc_b = self.lpips.distance(b,b_hat)
-            self.train_info['losses']['sup']['perc_b'].append(sup_perc_b)
+            #sup_perc_b = self.lpips.distance(b,b_hat)
+            #self.train_info['losses']['sup']['perc_b'].append(sup_perc_b)
             
             sup_dist_b = L1_loss(b,b_hat)
             self.train_info['losses']['sup']['dist_b'].append(sup_dist_b)
             
-            sup_loss_b = sup_dist_b+sup_perc_b
+            sup_loss_b = sup_dist_b
    
         
         #supervised loss a
@@ -317,6 +317,35 @@ class AugCycleGAN(object):
         
         return D_A_loss, D_Zb_loss, cycle_B_Za_loss
     
+    def mode_seeking_regularisation(self, a, b):
+        with tf.GradientTape(persistent=True) as tape:
+            z_b = tf.random.normal((a.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
+            b_hat = self.G_AB([a,z_b], training=True)
+                
+            z_b_dash = tf.random.normal((a.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
+            b_hat_dash = self.G_AB([a,z_b_dash], training=True)
+            
+            mode_seeking_rt_AB = L1_loss(b_hat, b_hat_dash)/(L1_loss(z_b, z_b_dash)+1e-8)
+            mode_seeking_loss_AB = -1*mode_seeking_rt_AB
+            
+            #-----------------------------------------------
+            z_a = tf.random.normal((b.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
+            a_hat = self.G_BA([b,z_a], training=True)
+                
+            z_a_dash = tf.random.normal((b.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
+            a_hat_dash = self.G_BA([b,z_a_dash], training=True)
+            
+            mode_seeking_rt_BA = L1_loss(a_hat, a_hat_dash)/(L1_loss(z_a, z_a_dash)+1e-8)
+            mode_seeking_loss_BA = -1*mode_seeking_rt_BA
+            
+            #update the generator models G_AB and G_BA
+            G_AB_grads = tape.gradient(mode_seeking_loss_AB, self.G_AB.trainable_variables)
+            self.G_AB_opt.apply_gradients(zip(G_AB_grads, self.G_AB_trainable_variables))
+            
+            G_BA_grads = tape.gradient(mode_seeking_loss_BA, self.G_BA.trainable_variables)
+            self.G_BA_opt.apply_gradients(zip(G_BA_grads, self.G_BA_trainable_variables))
+            
+        
     def ppl_regularisation(self, a, b):
         #every M steps we regularise the perceptual path length
         #we have 2 generators (G_AB, G_BA)
@@ -411,7 +440,8 @@ class AugCycleGAN(object):
                     #generate the noise vectors from the N(0,sigma^2) distribution
                     if batch % 10 == 0:
                         self.ppl_regularisation(img_A, img_B)
-                    
+                        self.mode_seeking_regularisation(img_A, img_B)
+                        
                         elapsed_time = chop_microseconds(datetime.datetime.now() - start_time)
                         print('[%d/%d][%d/%d]-[%s:%.3f %s:%.3f %s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f]-[%s:%f %s:%f]-[time:%s]'
                               % (epoch, epochs, batch, self.data_loader.n_batches,
