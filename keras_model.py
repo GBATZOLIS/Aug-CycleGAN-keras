@@ -491,7 +491,7 @@ class AugCycleGAN(object):
                 
                 dynamic_evaluator.model = self.G_AB #set the current G_AB model for evaluation
                 #Perception and distortion evaluation on the entire test dataset
-                info = dynamic_evaluator.test(batch_size=4000, num_out_imgs=10, training_point=training_point, test_type='mixed')
+                info = dynamic_evaluator.test(batch_size=400, num_out_imgs=20, training_point=training_point, test_type='mixed')
                 
                 self.train_info['performance']['ssim_mean'][1].append(info['ssim_mean'])
                 self.train_info['performance']['ssim_std'][1].append(info['ssim_std'])
