@@ -8,6 +8,10 @@ During testing phase, the model receives a low quality image that we want to enh
 Below, we present many gif examples which show the performance of the model. 
 On the left you can see the low quality image, in the middle the varying output enhanced high quality image and on the right the ground truth high quality image
 
+![Alt Text](https://github.com/GBATZOLIS/Aug-CycleGAN-keras/blob/master/progress/gif/833_lpips.gif)
+![Alt Text](https://github.com/GBATZOLIS/Aug-CycleGAN-keras/blob/master/progress/gif/38_lpips.gif)
+![Alt Text](https://github.com/GBATZOLIS/Aug-CycleGAN-keras/blob/master/progress/gif/1443_lpips.gif)
 ![Alt Text](https://github.com/GBATZOLIS/Aug-CycleGAN-keras/blob/master/progress/gif/1107_lpips.gif)
+
 
 
