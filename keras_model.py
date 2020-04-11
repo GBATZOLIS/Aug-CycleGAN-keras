@@ -340,10 +340,10 @@ class AugCycleGAN(object):
             
             #update the generator models G_AB and G_BA
             G_AB_grads = tape.gradient(mode_seeking_loss_AB, self.G_AB.trainable_variables)
-            self.G_AB_opt.apply_gradients(zip(G_AB_grads, self.G_AB_trainable_variables))
+            self.G_AB_opt.apply_gradients(zip(G_AB_grads, self.G_AB.trainable_variables))
             
             G_BA_grads = tape.gradient(mode_seeking_loss_BA, self.G_BA.trainable_variables)
-            self.G_BA_opt.apply_gradients(zip(G_BA_grads, self.G_BA_trainable_variables))
+            self.G_BA_opt.apply_gradients(zip(G_BA_grads, self.G_BA.trainable_variables))
             
         
     def ppl_regularisation(self, a, b):
