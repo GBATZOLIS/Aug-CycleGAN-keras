@@ -95,6 +95,8 @@ class AugCycleGAN(object):
         self.train_info['losses']['reg']={}
         self.train_info['losses']['reg']['ppl_G_AB']=[]
         self.train_info['losses']['reg']['ppl_G_BA']=[]
+        self.train_info['losses']['reg']['ms_G_AB']=[]
+        self.train_info['losses']['reg']['ms_G_BA']=[]
         
         
         #-------------PERFORMANCE EVALUATION----------------------
@@ -327,6 +329,7 @@ class AugCycleGAN(object):
             
             mode_seeking_rt_AB = L1_loss(b_hat, b_hat_dash)/(L1_loss(z_b, z_b_dash)+1e-8)
             mode_seeking_loss_AB = -1*mode_seeking_rt_AB
+            self.train_info['losses']['reg']['ms_G_AB'].append(mode_seeking_loss_AB)
             
             #-----------------------------------------------
             z_a = tf.random.normal((b.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
@@ -337,13 +340,14 @@ class AugCycleGAN(object):
             
             mode_seeking_rt_BA = L1_loss(a_hat, a_hat_dash)/(L1_loss(z_a, z_a_dash)+1e-8)
             mode_seeking_loss_BA = -1*mode_seeking_rt_BA
+            self.train_info['losses']['reg']['ms_G_BA'].append(mode_seeking_loss_BA)
             
-            #update the generator models G_AB and G_BA
-            G_AB_grads = tape.gradient(mode_seeking_loss_AB, self.G_AB.trainable_variables)
-            self.G_AB_opt.apply_gradients(zip(G_AB_grads, self.G_AB.trainable_variables))
-            
-            G_BA_grads = tape.gradient(mode_seeking_loss_BA, self.G_BA.trainable_variables)
-            self.G_BA_opt.apply_gradients(zip(G_BA_grads, self.G_BA.trainable_variables))
+        #update the generator models G_AB and G_BA
+        G_AB_grads = tape.gradient(mode_seeking_loss_AB, self.G_AB.trainable_variables)
+        self.G_AB_opt.apply_gradients(zip(G_AB_grads, self.G_AB.trainable_variables))
+        
+        G_BA_grads = tape.gradient(mode_seeking_loss_BA, self.G_BA.trainable_variables)
+        self.G_BA_opt.apply_gradients(zip(G_BA_grads, self.G_BA.trainable_variables))
             
         
     def ppl_regularisation(self, a, b):
@@ -363,9 +367,6 @@ class AugCycleGAN(object):
             ppl_loss_G_AB = tf.math.reduce_mean(tf.abs(pl_lengths_G_AB - self.pl_mean_G_AB))
             self.train_info['losses']['reg']['ppl_G_AB'].append(ppl_loss_G_AB)
             
-            ppl_G_AB_grads = tape.gradient(ppl_loss_G_AB, self.G_AB.trainable_variables)
-            self.G_AB_opt.apply_gradients(zip(ppl_G_AB_grads, self.G_AB.trainable_variables))
-            
             #---------------------------------------------------------------------------------------
             z_a = tf.random.normal((b.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
             a_hat = self.G_BA([b,z_a], training=True)
@@ -379,8 +380,13 @@ class AugCycleGAN(object):
             ppl_loss_G_BA = tf.math.reduce_mean(tf.abs(pl_lengths_G_BA - self.pl_mean_G_BA))
             self.train_info['losses']['reg']['ppl_G_BA'].append(ppl_loss_G_BA)
             
-            ppl_G_BA_grads = tape.gradient(ppl_loss_G_BA, self.G_BA.trainable_variables)
-            self.G_BA_opt.apply_gradients(zip(ppl_G_BA_grads, self.G_BA.trainable_variables))
+        
+        #update the generator models
+        ppl_G_AB_grads = tape.gradient(ppl_loss_G_AB, self.G_AB.trainable_variables)
+        self.G_AB_opt.apply_gradients(zip(ppl_G_AB_grads, self.G_AB.trainable_variables))
+        
+        ppl_G_BA_grads = tape.gradient(ppl_loss_G_BA, self.G_BA.trainable_variables)
+        self.G_BA_opt.apply_gradients(zip(ppl_G_BA_grads, self.G_BA.trainable_variables))
             
         
         if self.pl_mean_G_AB==0.:
@@ -443,13 +449,16 @@ class AugCycleGAN(object):
                         self.mode_seeking_regularisation(img_A, img_B)
                         
                         elapsed_time = chop_microseconds(datetime.datetime.now() - start_time)
-                        print('[%d/%d][%d/%d]-[%s:%.3f %s:%.3f %s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f]-[%s:%f %s:%f]-[time:%s]'
+                        print('[%d/%d][%d/%d]-[%s:%.3f %s:%.3f %s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f]-[%s:%.6f %s:%.6f %s:%.4f %s:%.4f]-[time:%s]'
                               % (epoch, epochs, batch, self.data_loader.n_batches,
                                  'D_A', D_A_loss, 'D_B', D_B_loss, 'D_Za', D_Za_loss, 'D_Zb', D_Zb_loss,
                                  'cyc_A_Zb', cycle_A_Zb_loss, 'cyc_B_Za', cycle_B_Za_loss,
                                  'sup_a', sup_a, 'sup_b', sup_b, 
                                  'ppl_AB', self.train_info['losses']['reg']['ppl_G_AB'][-1],
-                                 'ppl_BA', self.train_info['losses']['reg']['ppl_G_AB'][-1], elapsed_time))
+                                 'ppl_BA', self.train_info['losses']['reg']['ppl_G_AB'][-1], 
+                                 'ms_AB',self.train_info['losses']['reg']['ms_G_AB'][-1],
+                                 'ms_BA',self.train_info['losses']['reg']['ms_G_BA'][-1],
+                                 elapsed_time))
     
                     if batch % 50 == 0 and not(batch==0 and epoch==0):
                         training_point = np.around(epoch+batch/self.data_loader.n_batches, 4)
