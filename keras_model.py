@@ -91,6 +91,11 @@ class AugCycleGAN(object):
         self.train_info['losses']['unsup']['blur_ab']=[] #from domain A to domain B
         self.train_info['losses']['unsup']['blur_ba']=[] #from domain B to domain A
         
+        #regularisation losses
+        self.train_info['losses']['reg']={}
+        self.train_info['losses']['reg']['ppl_G_AB']=[]
+        self.train_info['losses']['reg']['ppl_G_BA']=[]
+        
         
         #-------------PERFORMANCE EVALUATION----------------------
         self.train_info['performance'] = {}
@@ -109,6 +114,11 @@ class AugCycleGAN(object):
 
         #configure data loader
         self.data_loader = DataLoader(img_res=(self.img_shape[0], self.img_shape[1]))
+        
+        #MISCALLENIA
+        #perceptual paths length parameters
+        self.pl_mean_G_AB = 0.
+        self.pl_mean_G_BA = 0.
         
         #instantiate the LPIPS loss object
         self.lpips = lpips(self.img_shape)
@@ -307,6 +317,54 @@ class AugCycleGAN(object):
         
         return D_A_loss, D_Zb_loss, cycle_B_Za_loss
     
+    def ppl_regularisation(self, a, b):
+        #every M steps we regularise the perceptual path length
+        #we have 2 generators (G_AB, G_BA)
+        
+        with tf.GradientTape(persistent=True) as tape:
+            z_b = tf.random.normal((a.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
+            b_hat = self.G_AB([a,z_b], training=True)
+            
+            z_b_dash = z_b + 0.05*tf.random.normal((a.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
+            b_hat_dash = self.G_AB([a,z_b_dash], training=True)
+            
+            delta_G_AB = tf.math.reduce_mean(tf.abs(b_hat-b_hat_dash), axis=[1,2,3])
+            pl_lengths_G_AB = delta_G_AB
+            
+            ppl_loss_G_AB = tf.math.reduce_mean(tf.abs(pl_lengths_G_AB - self.pl_mean_G_AB))
+            self.train_info['losses']['reg']['ppl_G_AB'].append(ppl_loss_G_AB)
+            
+            ppl_G_AB_grads = tape.gradient(ppl_loss_G_AB, self.G_AB.trainable_variables)
+            self.G_AB_opt.apply_gradients(zip(ppl_G_AB_grads, self.G_AB.trainable_variables))
+            
+            #---------------------------------------------------------------------------------------
+            z_a = tf.random.normal((b.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
+            a_hat = self.G_BA([b,z_a], training=True)
+            
+            z_a_dash = z_a + 0.05*tf.random.normal((b.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
+            a_hat_dash = self.G_BA([b,z_a_dash], training=True)
+            
+            delta_G_BA = tf.math.reduce_mean(tf.abs(a_hat-a_hat_dash), axis=[1,2,3])
+            pl_lengths_G_BA = delta_G_BA
+            
+            ppl_loss_G_BA = tf.math.reduce_mean(tf.abs(pl_lengths_G_BA - self.pl_mean_G_BA))
+            self.train_info['losses']['reg']['ppl_G_BA'].append(ppl_loss_G_BA)
+            
+            ppl_G_BA_grads = tape.gradient(ppl_loss_G_BA, self.G_BA.trainable_variables)
+            self.G_BA_opt.apply_gradients(zip(ppl_G_BA_grads, self.G_BA.trainable_variables))
+            
+        
+        if self.pl_mean_G_AB==0.:
+            self.pl_mean_G_AB = tf.math.reduce_mean(pl_lengths_G_AB)
+        else:
+            self.pl_mean_G_AB = 0.99*self.pl_mean_G_AB + 0.01*tf.math.reduce_mean(pl_lengths_G_AB)
+            
+        if self.pl_mean_G_BA==0.:
+            self.pl_mean_G_BA = tf.math.reduce_mean(pl_lengths_G_BA)
+        else:
+            self.pl_mean_G_BA = 0.99*self.pl_mean_G_BA + 0.01*tf.math.reduce_mean(pl_lengths_G_BA)
+        
+
     def save_models(self,epoch):
         
         #save the models to intoduce resume capacity to training
@@ -339,8 +397,8 @@ class AugCycleGAN(object):
                     sup_img_A = tf.convert_to_tensor(sup_img_A, dtype=tf.float32)
                     sup_img_B = tf.convert_to_tensor(sup_img_B, dtype=tf.float32)
         
-                    #generate the noise vectors from the N(0,sigma^2) distribution
                     
+                        
                     for i in range(2):
                         z_a = tf.random.normal((batch_size, 1, 1, self.latent_shape[-1]), dtype=tf.float32)
                         z_b = tf.random.normal((batch_size, 1, 1, self.latent_shape[-1]), dtype=tf.float32)
@@ -350,12 +408,18 @@ class AugCycleGAN(object):
                     
                     sup_a, sup_b = self.supervised_step(sup_img_A, sup_img_B)
                     
-                    elapsed_time = chop_microseconds(datetime.datetime.now() - start_time)
-                    print('[%d/%d][%d/%d]-[%s:%.3f %s:%.3f %s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f]-[time:%s]'
-                          % (epoch, epochs, batch, self.data_loader.n_batches,
-                             'D_A', D_A_loss, 'D_B', D_B_loss, 'D_Za', D_Za_loss, 'D_Zb', D_Zb_loss,
-                             'cyc_A_Zb', cycle_A_Zb_loss, 'cyc_B_Za', cycle_B_Za_loss,
-                             'sup_a', sup_a, 'sup_b', sup_b, elapsed_time))
+                    #generate the noise vectors from the N(0,sigma^2) distribution
+                    if batch % 10 == 0:
+                        self.ppl_regularisation(img_A, img_B)
+                    
+                        elapsed_time = chop_microseconds(datetime.datetime.now() - start_time)
+                        print('[%d/%d][%d/%d]-[%s:%.3f %s:%.3f %s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f]-[%s:%f %s:%f]-[time:%s]'
+                              % (epoch, epochs, batch, self.data_loader.n_batches,
+                                 'D_A', D_A_loss, 'D_B', D_B_loss, 'D_Za', D_Za_loss, 'D_Zb', D_Zb_loss,
+                                 'cyc_A_Zb', cycle_A_Zb_loss, 'cyc_B_Za', cycle_B_Za_loss,
+                                 'sup_a', sup_a, 'sup_b', sup_b, 
+                                 'ppl_AB', self.train_info['losses']['reg']['ppl_G_AB'][-1],
+                                 'ppl_BA', self.train_info['losses']['reg']['ppl_G_AB'][-1], elapsed_time))
     
                     if batch % 50 == 0 and not(batch==0 and epoch==0):
                         training_point = np.around(epoch+batch/self.data_loader.n_batches, 4)
@@ -448,6 +512,7 @@ class AugCycleGAN(object):
             if clean=='y' or clean=='yes':
                 #delete training data from repo main files
                 G_AB_paths = glob('models/G_AB/*.h5')
+                G_AB_all_paths = glob('models/G_AB_all/*.h5')
                 G_BA_paths = glob('models/G_BA/*.h5')
                 E_A_paths = glob('models/E_A/*.h5')
                 E_B_paths = glob('models/E_B/*.h5')
@@ -457,6 +522,7 @@ class AugCycleGAN(object):
                 D_Zb_paths = glob('models/D_Zb/*.h5')
                 
                 self.delete_models(G_AB_paths)
+                self.delete_models(G_AB_all_paths)
                 self.delete_models(G_BA_paths)
                 self.delete_models(E_A_paths)
                 self.delete_models(E_B_paths)
@@ -468,7 +534,7 @@ class AugCycleGAN(object):
                 
             
             
-model = AugCycleGAN((100,100,3), (1,1,4), resume=True)
+model = AugCycleGAN((100,100,3), (1,1,2), resume=False)
 model.train(epochs=100, batch_size = 1)
 
 
