@@ -26,7 +26,7 @@ from data_loader import DataLoader
 
 #keras
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.models import Model
+from tensorflow.keras.models import Model, clone_model
 from tensorflow.keras.layers import Input
 from tensorflow.keras.models import load_model
 from keras_modules import blur
@@ -117,10 +117,13 @@ class AugCycleGAN(object):
         #configure data loader
         self.data_loader = DataLoader(img_res=(self.img_shape[0], self.img_shape[1]))
         
-        #MISCALLENIA
+        #TRAINING PARAMETERS
         #perceptual paths length parameters
         self.pl_mean_G_AB = 0.
         self.pl_mean_G_BA = 0.
+        
+        #Exponential moving average parameters
+        self.beta=0.999
         
         #instantiate the LPIPS loss object
         self.lpips = lpips(self.img_shape)
@@ -146,11 +149,30 @@ class AugCycleGAN(object):
             self.D_Za.load_weights(glob('models/D_Za/*.h5')[-1])
             self.D_Zb.load_weights(glob('models/D_Zb/*.h5')[-1])
         
+        #create the inference model with exponential moving average of the weights
+        self.G_AB_EMA = clone_model(self.G_AB)
+        self.G_AB_EMA.set_weights(self.G_AB.get_weights())
+        
+        #set the optimizers of all models
         self.G_AB_opt = self.G_BA_opt = Adam(lr=0.0002, beta_1=0.5)
         self.D_A_opt = self.D_B_opt = Adam(lr=0.0002, beta_1=0.5)
         self.E_A_opt = self.E_B_opt = Adam(lr=0.0002, beta_1=0.5)
         self.D_Za_opt = self.D_Zb_opt = Adam(lr=0.0002, beta_1=0.5)
+        
     
+    def EMA(self,):
+        for i in range(len(self.G_AB.layers)):
+            up_weight = self.G_AB.layers[i].get_weights()
+            old_weight = self.G_AB_EMA.layers[i].get_weights()
+            new_weight = []
+            for j in range(len(up_weight)):
+                new_weight.append(old_weight[j] * self.beta + (1-self.beta) * up_weight[j])
+            self.G_AB_EMA.layers[i].set_weights(new_weight)
+
+    def EMA_init(self,):
+        self.G_AB_EMA.set_weights(self.G_AB.get_weights())
+
+        
     def supervised_step(self, a, b):     
         with tf.GradientTape(persistent=True) as tape:
             z_a_hat = self.E_A([a,b], training=True)
@@ -203,7 +225,7 @@ class AugCycleGAN(object):
 
             b_hat_blur=self.blurring(b_hat, training=False)
             a_blur = self.blurring(a, training=False)
-            
+             
             z_a_hat = self.E_A([a, b_hat], training=True)
             fake_z_a = self.D_Za(z_a_hat, training=True)
     
@@ -358,7 +380,7 @@ class AugCycleGAN(object):
             z_b = tf.random.normal((a.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
             b_hat = self.G_AB([a,z_b], training=True)
             
-            z_b_dash = z_b + 0.05*tf.random.normal((a.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
+            z_b_dash = z_b + 0.1*tf.random.normal((a.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
             b_hat_dash = self.G_AB([a,z_b_dash], training=True)
             
             delta_G_AB = tf.math.reduce_mean(tf.abs(b_hat-b_hat_dash), axis=[1,2,3])
@@ -371,7 +393,7 @@ class AugCycleGAN(object):
             z_a = tf.random.normal((b.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
             a_hat = self.G_BA([b,z_a], training=True)
             
-            z_a_dash = z_a + 0.05*tf.random.normal((b.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
+            z_a_dash = z_a + 0.1*tf.random.normal((b.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
             a_hat_dash = self.G_BA([b,z_a_dash], training=True)
             
             delta_G_BA = tf.math.reduce_mean(tf.abs(a_hat-a_hat_dash), axis=[1,2,3])
@@ -392,12 +414,12 @@ class AugCycleGAN(object):
         if self.pl_mean_G_AB==0.:
             self.pl_mean_G_AB = tf.math.reduce_mean(pl_lengths_G_AB)
         else:
-            self.pl_mean_G_AB = 0.99*self.pl_mean_G_AB + 0.01*tf.math.reduce_mean(pl_lengths_G_AB)
+            self.pl_mean_G_AB = 0.999*self.pl_mean_G_AB + 0.001*tf.math.reduce_mean(pl_lengths_G_AB)
             
         if self.pl_mean_G_BA==0.:
             self.pl_mean_G_BA = tf.math.reduce_mean(pl_lengths_G_BA)
         else:
-            self.pl_mean_G_BA = 0.99*self.pl_mean_G_BA + 0.01*tf.math.reduce_mean(pl_lengths_G_BA)
+            self.pl_mean_G_BA = 0.999*self.pl_mean_G_BA + 0.001*tf.math.reduce_mean(pl_lengths_G_BA)
         
 
     def save_models(self,epoch):
@@ -443,11 +465,17 @@ class AugCycleGAN(object):
                     
                     sup_a, sup_b = self.supervised_step(sup_img_A, sup_img_B)
                     
-                    #generate the noise vectors from the N(0,sigma^2) distribution
-                    if batch % 10 == 0:
+                    if batch % 5 ==0 and not(batch==0 and epoch==0):
+                        self.EMA() #update the inference model with exponential moving average
+                        
                         self.ppl_regularisation(img_A, img_B)
                         self.mode_seeking_regularisation(img_A, img_B)
                         
+                        self.ppl_regularisation(sup_img_A, sup_img_B)
+                        self.mode_seeking_regularisation(sup_img_A, sup_img_B)
+
+                    #generate the noise vectors from the N(0,sigma^2) distribution
+                    if batch % 10 == 0 and not(batch==0 and epoch==0):
                         elapsed_time = chop_microseconds(datetime.datetime.now() - start_time)
                         print('[%d/%d][%d/%d]-[%s:%.3f %s:%.3f %s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f]-[%s:%.6f %s:%.6f %s:%.4f %s:%.4f]-[time:%s]'
                               % (epoch, epochs, batch, self.data_loader.n_batches,
@@ -455,7 +483,7 @@ class AugCycleGAN(object):
                                  'cyc_A_Zb', cycle_A_Zb_loss, 'cyc_B_Za', cycle_B_Za_loss,
                                  'sup_a', sup_a, 'sup_b', sup_b, 
                                  'ppl_AB', self.train_info['losses']['reg']['ppl_G_AB'][-1],
-                                 'ppl_BA', self.train_info['losses']['reg']['ppl_G_AB'][-1], 
+                                 'ppl_BA', self.train_info['losses']['reg']['ppl_G_AB'][-1],
                                  'ms_AB',self.train_info['losses']['reg']['ms_G_AB'][-1],
                                  'ms_BA',self.train_info['losses']['reg']['ms_G_BA'][-1],
                                  elapsed_time))
@@ -463,7 +491,7 @@ class AugCycleGAN(object):
                     if batch % 50 == 0 and not(batch==0 and epoch==0):
                         training_point = np.around(epoch+batch/self.data_loader.n_batches, 4)
                         self.train_info['performance']['eval_points'].append(training_point)
-                        dynamic_evaluator.model = self.G_AB
+                        dynamic_evaluator.model = self.G_AB_EMA
                         #Perception and distortion evaluation
                         info = dynamic_evaluator.test(batch_size=100, num_out_imgs=10, training_point=training_point, test_type='mixed')
                         
@@ -495,7 +523,9 @@ class AugCycleGAN(object):
                         #save the tensorboard values
                         with open('progress/training_information/'+ 'train_info' + '.pkl', 'wb') as f:
                             pickle.dump(self.train_info, f, pickle.HIGHEST_PROTOCOL)
-                
+                    
+                    if batch % 500 ==0 and not(batch==0 and epoch==0):
+                        self.EMA_init() #restart the G_AB_EMA from the current state of the G_AB
                 
                 
                 dynamic_evaluator.model = self.G_AB #set the current G_AB model for evaluation
