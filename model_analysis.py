@@ -53,7 +53,7 @@ def get_random_patch(img, patch_dimension):
 img_shape = (100,100,3)
 latent_shape=(1,1,2)
 
-model_name = 'G_AB_1_3600.h5'
+model_name = 'G_AB_1_400.h5'
 
 model = G_AB(img_shape=img_shape, latent_shape=latent_shape) #define model architecture
 model.load_weights("models/%s" % (model_name)) #load the saved weights
@@ -144,8 +144,8 @@ ax.imshow(y_true)
 """  
 
 
-
 """
+
 images=[]
 x1, y1 = -2.97, 2.754
 x2, y2 = 2.73471, -2.24321
@@ -184,9 +184,9 @@ y_co=[]
 
 omega=1
 T=2*np.pi/omega
-N=100 #steps per revolution
-x_mode = 0.777
-y_mode = 0.777
+N=150 #steps per revolution
+x_mode = 0.
+y_mode = 0.
 
 
 images=[]
@@ -216,7 +216,7 @@ images[0].save('progress/image.gif',
 
 #--------------------------------------------------------------------
 
-"""
+
 import tensorflow as tf
 
 metric = lpips((100,100,3))
@@ -242,12 +242,12 @@ with tf.device('/GPU:0'):
             z=np.expand_dims(z, axis=0)
             z=tf.convert_to_tensor(z)
             y_pred = model([x,z])
-            #SSIM[i,j] = metric.distance(y_pred)
+            SSIM[i,j] = metric.distance(y_pred)
         
-            SSIM[i,j] = ssim(np.array(y_pred)[0],np.array(y_true)[0], multichannel=True)
+            #SSIM[i,j] = ssim(np.array(y_pred)[0],np.array(y_true)[0], multichannel=True)
   
 plt.figure()
-plt.contourf(z1,z2,SSIM, levels=1000, cmap="RdBu_r")
+plt.contourf(z1,z2,SSIM, levels=500, cmap="RdBu_r")
 plt.colorbar()
 #plt.plot(x_co, y_co, 'ko', ms=1)
-"""
+

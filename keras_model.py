@@ -223,8 +223,8 @@ class AugCycleGAN(object):
             b_hat = self.G_AB([a, z_b], training=True)
             fake_b = self.D_B(b_hat, training=True)
 
-            b_hat_blur=self.blurring(b_hat, training=False)
-            a_blur = self.blurring(a, training=False)
+            #b_hat_blur=self.blurring(b_hat, training=False)
+            #a_blur = self.blurring(a, training=False)
              
             z_a_hat = self.E_A([a, b_hat], training=True)
             fake_z_a = self.D_Za(z_a_hat, training=True)
@@ -252,10 +252,10 @@ class AugCycleGAN(object):
             rec_Zb = L1_loss(z_b_cyc,z_b)
             self.train_info['losses']['unsup']['rec_Zb'].append(rec_Zb)
             
-            blur_ab = L1_loss(a_blur, b_hat_blur)
-            self.train_info['losses']['unsup']['blur_ab'].append(blur_ab)
+            #blur_ab = L1_loss(a_blur, b_hat_blur)
+            #self.train_info['losses']['unsup']['blur_ab'].append(blur_ab)
             
-            cycle_A_Zb_loss = adv_gen_B + adv_gen_Za + rec_a_dist + rec_Zb + blur_ab
+            cycle_A_Zb_loss = adv_gen_B + adv_gen_Za + rec_a_dist + rec_Zb
 
         D_B_grads = tape.gradient(D_B_loss, self.D_B.trainable_variables)
         self.D_B_opt.apply_gradients(zip(D_B_grads, self.D_B.trainable_variables))
@@ -286,8 +286,8 @@ class AugCycleGAN(object):
             a_hat = self.G_BA([b, z_a], training=True)
             fake_a = self.D_A(a_hat, training=True)
 
-            a_hat_blur=self.blurring(a_hat, training=False)
-            b_blur = self.blurring(b, training=False)
+            #a_hat_blur=self.blurring(a_hat, training=False)
+            #b_blur = self.blurring(b, training=False)
 
             z_b_hat = self.E_B([a_hat, b], training=True)
             fake_z_b = self.D_Zb(z_b_hat, training=True)
@@ -315,10 +315,10 @@ class AugCycleGAN(object):
             rec_Za = L1_loss(z_a_cyc,z_a)
             self.train_info['losses']['unsup']['rec_Za'].append(rec_Za)
             
-            blur_ba = L1_loss(b_blur,a_hat_blur)
-            self.train_info['losses']['unsup']['blur_ba'].append(blur_ba)
+            #blur_ba = L1_loss(b_blur,a_hat_blur)
+            #self.train_info['losses']['unsup']['blur_ba'].append(blur_ba)
             
-            cycle_B_Za_loss = adv_gen_A + adv_gen_Zb + rec_b_dist + rec_Za + blur_ba
+            cycle_B_Za_loss = adv_gen_A + adv_gen_Zb + rec_b_dist + rec_Za
 
         D_A_grads = tape.gradient(D_A_loss, self.D_A.trainable_variables)
         self.D_A_opt.apply_gradients(zip(D_A_grads, self.D_A.trainable_variables))
@@ -380,7 +380,7 @@ class AugCycleGAN(object):
             z_b = tf.random.normal((a.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
             b_hat = self.G_AB([a,z_b], training=True)
             
-            z_b_dash = z_b + 0.1*tf.random.normal((a.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
+            z_b_dash = z_b + 0.05*tf.random.normal((a.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
             b_hat_dash = self.G_AB([a,z_b_dash], training=True)
             
             delta_G_AB = tf.math.sqrt(tf.math.reduce_sum(tf.math.square(b_hat-b_hat_dash), axis=[1,2,3]))
@@ -394,7 +394,7 @@ class AugCycleGAN(object):
             z_a = tf.random.normal((b.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
             a_hat = self.G_BA([b,z_a], training=True)
             
-            z_a_dash = z_a + 0.1*tf.random.normal((b.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
+            z_a_dash = z_a + 0.05*tf.random.normal((b.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
             a_hat_dash = self.G_BA([b,z_a_dash], training=True)
             
             delta_G_BA = tf.math.sqrt(tf.math.reduce_sum(tf.math.square(a_hat-a_hat_dash), axis=[1,2,3]))
@@ -466,13 +466,15 @@ class AugCycleGAN(object):
                     
                     sup_a, sup_b = self.supervised_step(sup_img_A, sup_img_B)
                     
-                    self.ppl_regularisation(img_A, img_B)
+                    
+                    if batch % 5==0 and not(batch==0 and epoch==0):
+                        self.ppl_regularisation(img_A, img_B)
+                        
 
                     #generate the noise vectors from the N(0,sigma^2) distribution
                     if batch % 10 == 0 and not(batch==0 and epoch==0):
                         self.EMA() #update the inference model with exponential moving average
-                        #self.ppl_regularisation(img_A, img_B)
-                        #self.ppl_regularisation(sup_img_A, sup_img_B)
+                        self.ppl_regularisation(img_A, img_B)
                         
                         elapsed_time = chop_microseconds(datetime.datetime.now() - start_time)
                         print('[%d/%d][%d/%d]-[%s:%.3f %s:%.3f %s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f]-[%s:%.6f %s:%.6f %s:%.4f %s:%.4f]-[time:%s]'
@@ -603,11 +605,6 @@ class AugCycleGAN(object):
             
 model = AugCycleGAN((100,100,3), (1,1,2), resume=False)
 model.train(epochs=100, batch_size = 20)
-
-
-
-    
-
         
 
         
