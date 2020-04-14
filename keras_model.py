@@ -176,7 +176,7 @@ class AugCycleGAN(object):
     def supervised_step(self, a, b):     
         with tf.GradientTape(persistent=True) as tape:
             z_a_hat = self.E_A([a,b], training=True)
-            fake_z_a = self.D_Za(z_a_hat, training=True) #used for the regularisation og the E_A encoder
+            fake_z_a = self.D_Za(z_a_hat, training=False) #used for the regularisation og the E_A encoder
             a_hat = self.G_BA([b,z_a_hat], training=True)
 
             #sup_perc_a = self.lpips.distance(a,a_hat)
@@ -187,10 +187,11 @@ class AugCycleGAN(object):
             
             sup_loss_a = sup_dist_a
             adv_gen_Za = gen_loss(fake_z_a)
+            E_A_loss = sup_loss_a + 0.5*adv_gen_Za
             
             #---------------------------------------------------------------
             z_b_hat = self.E_B([a,b], training=True)
-            fake_z_b = self.D_Zb(z_b_hat, training=True)
+            fake_z_b = self.D_Zb(z_b_hat, training=False)
             b_hat = self.G_AB([a, z_b_hat], training=True)
             
             
@@ -202,19 +203,20 @@ class AugCycleGAN(object):
             
             sup_loss_b = sup_dist_b
             adv_gen_Zb = gen_loss(fake_z_b)
+            E_B_loss = sup_loss_b + 0.5*adv_gen_Zb
         
         #supervised loss a
         G_BA_grads = tape.gradient(sup_loss_a, self.G_BA.trainable_variables)
         self.G_BA_opt.apply_gradients(zip(G_BA_grads, self.G_BA.trainable_variables))
         
-        E_A_grads = tape.gradient(sup_loss_a+0.5*adv_gen_Za, self.E_A.trainable_variables)
+        E_A_grads = tape.gradient(E_A_loss, self.E_A.trainable_variables)
         self.E_A_opt.apply_gradients(zip(E_A_grads, self.E_A.trainable_variables))
         
         #supervised loss b
         G_AB_grads = tape.gradient(sup_loss_b, self.G_AB.trainable_variables)
         self.G_AB_opt.apply_gradients(zip(G_AB_grads, self.G_AB.trainable_variables))
         
-        E_B_grads = tape.gradient(sup_loss_b+0.5*adv_gen_Zb, self.E_B.trainable_variables)
+        E_B_grads = tape.gradient(E_B_loss, self.E_B.trainable_variables)
         self.E_B_opt.apply_gradients(zip(E_B_grads, self.E_B.trainable_variables))
         
         return sup_loss_a, sup_loss_b
@@ -384,7 +386,7 @@ class AugCycleGAN(object):
             z_b = tf.random.normal((a.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
             b_hat = self.G_AB([a,z_b], training=True)
             
-            z_b_dash = z_b + 0.5*tf.random.normal((a.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
+            z_b_dash = z_b + 0.05*tf.random.normal((a.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
             b_hat_dash = self.G_AB([a,z_b_dash], training=True)
             
             delta_G_AB = tf.math.sqrt(tf.math.reduce_sum(tf.math.square(b_hat-b_hat_dash), axis=[1,2,3]))
@@ -398,7 +400,7 @@ class AugCycleGAN(object):
             z_a = tf.random.normal((b.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
             a_hat = self.G_BA([b,z_a], training=True)
             
-            z_a_dash = z_a + 0.5*tf.random.normal((b.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
+            z_a_dash = z_a + 0.05*tf.random.normal((b.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
             a_hat_dash = self.G_BA([b,z_a_dash], training=True)
             
             delta_G_BA = tf.math.sqrt(tf.math.reduce_sum(tf.math.square(a_hat-a_hat_dash), axis=[1,2,3]))
@@ -607,7 +609,7 @@ class AugCycleGAN(object):
             
             
 model = AugCycleGAN((100,100,3), (1,1,2), resume=False)
-model.train(epochs=100, batch_size = 20)
+model.train(epochs=100, batch_size = 1)
         
 
         
