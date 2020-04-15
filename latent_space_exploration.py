@@ -204,8 +204,8 @@ class SwarmOptimiser(object):
         #PARTICLE SWARM OPTIMISATION
         #initialisation
         
-        pso_swarms_positions = np.zeros((2500//self.swarms+10, self.swarms, self.n))
-        pso_swarms_velocities = np.zeros((2500//self.swarms+10, self.swarms, self.n))
+        pso_swarms_positions = np.zeros((2000//self.swarms+10, self.swarms, self.n))
+        pso_swarms_velocities = np.zeros((2000//self.swarms+10, self.swarms, self.n))
         
         search_phase=False
         if search_phase==True:
@@ -233,7 +233,7 @@ class SwarmOptimiser(object):
         phi_g = 0.75
         omega=0.9
         it=1
-        while self.func_evals<2500:
+        while self.func_evals<2000:
            print("iteration: ", it)
            print(self.func_evals)
            for i in range(self.swarms):
@@ -289,7 +289,7 @@ class latent_explorer(object):
         self.img_shape = img_shape
         self.latent_size = latent_size
         self.model = G_AB(img_shape, (1,1,latent_size))
-        self.model.load_weights('models/G_AB_61_300.h5')
+        self.model.load_weights('models/G_AB_6_0.h5')
         
         #instantiate the LPIPS loss object
         self.lpips = lpips(self.img_shape)
@@ -297,9 +297,32 @@ class latent_explorer(object):
         
         self.gif_images=None
         
-    def model_func(self,img,latent):
+    def model_func(self, img, latent):
         return self.model.predict([img,latent])[0]
     
+    def create_gif(self, a, b, name, start=0, gif_type='random'):
+        if gif_type=='random':
+            images=[]
+            
+            z_start=start
+            for _ in range(3):
+                z_start=np.expand_dims(z_start, axis=0)
+                
+            
+            for i in tqdm(range(500)):
+                z_new=z_start+0.05*np.random.randn(1,1,1,self.latent_size)
+                z_start=z_new
+                fake_b = self.model_func(a, z_new)
+                frame = Image.fromarray((np.concatenate((np.squeeze(a,axis=0), fake_b, b), axis=1) * 255).astype(np.uint8))
+                images.append(frame)
+            
+            print(np.linalg.norm(np.squeeze(z_start-start), ord=2))
+            images[0].save('progress/gif/random/%s.gif' % (str(name)),
+                                        save_all=True, 
+                                        append_images=images[::-1], 
+                                        optimize=False, duration=50, loop=1) 
+            
+        
     def mode_search(self, img_A, img_B, metric='lpips'):
         if metric=='ssim':
             def func(z):
@@ -336,9 +359,9 @@ class latent_explorer(object):
         #domain range determination
         lower_range = -3*np.ones(n)
         upper_range = 3*np.ones(n)
-        M=50 #duration of the search phase (number of iterations in search phase)
-        c=3 #determine how many swarms are injected to the domain. swarms_factor^
-        sw_optimiser = SwarmOptimiser(n, lower_range, upper_range,func, M, c)
+        M=30 #duration of the search phase (number of iterations in search phase)
+        c=2 #determine how many swarms are injected to the domain. swarms_factor^
+        sw_optimiser = SwarmOptimiser(n, lower_range, upper_range, func, M, c)
         sw_optimiser.initialise_swarm_positions()
         sw_optimiser.search_space()
         min_val, cost = sw_optimiser.PSO()
@@ -346,23 +369,32 @@ class latent_explorer(object):
         
         return min_val, cost
 
-latent_exp = latent_explorer((100,100,3), 2)
+latent_exp = latent_explorer((100,100,3), 4)
 
-i=1176
 
-x_true = plt.imread('data/testA/%s.jpg'% str(i)).astype(np.float)
-x_true = x_true/255
-x = np.expand_dims(x_true, axis=0)
+
+
+names=[97,98,104,117,133,145,179,220,296,331,364,378,379,397,484,554,597,595,600,783,790,
+       833, 839, 847, 849, 850, 885, 913, 936, 939, 1034, 1047, 1107, 1121, 1144, 1176, 1253,
+       1300, 1372, 1384, 1428, 1443, 1494, 1528, 1607, 1628, 1660, 1671, 1701, 1705, 1755, 1776
+       ]
+
+for i in tqdm(names):
+    x_true = plt.imread('data/testA/%s.jpg'% str(i)).astype(np.float)
+    x_true = x_true/255
+    x = np.expand_dims(x_true, axis=0)
+        
+    y_true = plt.imread('data/testB/%s.jpg'% str(i)).astype(np.float)
+    y_true = y_true/255
     
-y_true = plt.imread('data/testB/%s.jpg'% str(i)).astype(np.float)
-y_true = y_true/255
-    
-opt_loc, opt_value=latent_exp.mode_search(x,y_true)
+    opt_loc, opt_value=latent_exp.mode_search(x,y_true, metric='lpips')
+    latent_exp.create_gif(x, y_true, i, start=opt_loc)
 
-latent_exp.gif_images[0].save('progress/gif/lpips/%s_%s.gif'%(str(i), 'lpips'),
-                                        save_all=True, 
-                                        append_images=latent_exp.gif_images, 
-                                        optimize=False, duration=100, loop=0)  
+
+
+
+
+
 
 """
 info={}
