@@ -300,8 +300,8 @@ class latent_explorer(object):
     def model_func(self, img, latent):
         return self.model.predict([img,latent])[0]
     
-    def create_gif(self, a, b, name, start=0, gif_type='random'):
-        if gif_type=='random':
+    def create_gif(self, a, b, name, start=0, gif_type='random_walk'):
+        if gif_type=='random_walk':
             images=[]
             
             z_start=start
@@ -321,6 +321,19 @@ class latent_explorer(object):
                                         save_all=True, 
                                         append_images=images[::-1], 
                                         optimize=False, duration=50, loop=1) 
+        
+        elif gif_type=='normal':
+            images=[]
+            for i in tqdm(range(500)):
+                z = np.random.randn(1,1,1,self.latent_size)
+                fake_b = self.model_func(a, z)
+                frame = Image.fromarray((np.concatenate((np.squeeze(a,axis=0), fake_b, b), axis=1) * 255).astype(np.uint8))
+                images.append(frame)
+            
+            images[0].save('progress/gif/random/%s.gif' % (str(name)),
+                                        save_all=True, 
+                                        append_images=images[::-1], 
+                                        optimize=False, duration=50, loop=0) 
             
         
     def mode_search(self, img_A, img_B, metric='lpips'):
@@ -374,11 +387,12 @@ latent_exp = latent_explorer((100,100,3), 4)
 
 
 
-names=[97,98,104,117,133,145,179,220,296,331,364,378,379,397,484,554,597,595,600,783,790,
+names=[296,331,364,378,379,397,484,554,597,595,600,783,790,
        833, 839, 847, 849, 850, 885, 913, 936, 939, 1034, 1047, 1107, 1121, 1144, 1176, 1253,
        1300, 1372, 1384, 1428, 1443, 1494, 1528, 1607, 1628, 1660, 1671, 1701, 1705, 1755, 1776
        ]
 
+names=[833, 839, 847, 849, 850, 885, 913, 936, 939, 1034, 1047, 1107, 1121, 1144, 1176, 1253]
 for i in tqdm(names):
     x_true = plt.imread('data/testA/%s.jpg'% str(i)).astype(np.float)
     x_true = x_true/255
@@ -387,8 +401,8 @@ for i in tqdm(names):
     y_true = plt.imread('data/testB/%s.jpg'% str(i)).astype(np.float)
     y_true = y_true/255
     
-    opt_loc, opt_value=latent_exp.mode_search(x,y_true, metric='lpips')
-    latent_exp.create_gif(x, y_true, i, start=opt_loc)
+    #opt_loc, opt_value=latent_exp.mode_search(x,y_true, metric='lpips')
+    latent_exp.create_gif(x, y_true, i, start=0)
 
 
 
