@@ -7,7 +7,7 @@ During testing phase, the model receives as input a low quality image (that we w
 
 Below, we present gif examples which show how the model performs on the test part of the DPED dataset.
 
-On the left you can see the low quality image, in the middle the varying output enhanced high quality image and on the right the ground truth high quality image. In the following gifs, the latent code varies so that the output image (middle) gets as close as possible to the ground truth image (right) based on the LPIPS metric.
+On the left you can see the low quality image, in the middle the varying output enhanced high quality image and on the right the ground truth high quality image. In the following gifs, the output images are sampled from the modelled conditional distribution P(Y|X) where X is the given low quality image and Y is the enhanced image.
 
 
 ![Alt Text](https://github.com/GBATZOLIS/Aug-CycleGAN-keras/blob/master/progress/gif/1047.gif)
@@ -20,7 +20,7 @@ On the left you can see the low quality image, in the middle the varying output 
 ![Alt Text](https://github.com/GBATZOLIS/Aug-CycleGAN-keras/blob/master/progress/gif/833.gif)
 ![Alt Text](https://github.com/GBATZOLIS/Aug-CycleGAN-keras/blob/master/progress/gif/97.gif)
 
-In the following gifs, the output images are sampled from the modeled conditional distribution P(Y|X) where X is the given low quality image and Y is the enhanced image.
+
 
 
 
