@@ -96,48 +96,6 @@ class evaluator(object):
                   (info['ssim_min'], info['ssim_mean'], info['ssim_max'], info['ssim_std']))
             return info
         
-        elif test_type == 'mixed':
-            lpips_vals=np.zeros((len(phone_paths), num_out_imgs))
-            ssim_vals=np.zeros((len(phone_paths), num_out_imgs))
-            i=0
-            for phone_path, dslr_path in zip(phone_paths, dslr_paths):
-                x_true = plt.imread(phone_path).astype(np.float)
-                x_true = x_true/255
-                x = np.expand_dims(x_true, axis=0) #form needed to pass to the network 
-                x = tf.convert_to_tensor(x)
-                
-                y_true = plt.imread(dslr_path).astype(np.float)
-                y_true = y_true/255
-                y_true_nd_array = np.expand_dims(y_true, axis=0)
-                y_true_tensor = tf.convert_to_tensor(y_true_nd_array, dtype=tf.float32)
-                
-                with tf.device('/GPU:0'):
-                    self.lpips.set_reference(y_true_tensor)
-                    for j in range(num_out_imgs):
-                        z = tf.random.normal(shape=(1,1,1, self.latent_size))
-                        y_pred_tensor = self.model([x,z])
-                        lpips_vals[i,j] = self.lpips.distance(y_pred_tensor)
-                        
-                        y_pred_nd_array = np.array(y_pred_tensor)
-                        ssim_vals[i,j] = ssim(y_pred_nd_array[0],y_true_nd_array[0], multichannel=True)      
-                i+=1
-            
-            info={}
-            
-            info['lpips_mean'] = np.mean(lpips_vals)
-            info['lpips_std'] = np.std(lpips_vals)
-            
-            print('lpips_mean : %.4f - lpips_std: %.3f' % 
-                  (info['lpips_mean'], info['lpips_std']))
-            
-            info['ssim_mean'] = np.mean(ssim_vals)
-            info['ssim_std'] = np.std(ssim_vals)
-            
-            print('ssim_mean : %.4f - ssim_std: %.3f' % 
-                  (info['ssim_mean'], info['ssim_std']))
-            
-            return info
-        
         elif test_type=='diversity':
             i=0
             avg_ref_distances=np.zeros(batch_size)
@@ -165,7 +123,118 @@ class evaluator(object):
             avg_lpips_distance = np.mean(avg_ref_distances)
             print('diversity: %.4f' % avg_lpips_distance)
             return avg_lpips_distance
+        
+        elif test_type == 'mixed':
+            lpips_vals=np.zeros((len(phone_paths), num_out_imgs)) #perception values
+            ssim_vals=np.zeros((len(phone_paths), num_out_imgs)) #distortion values
+            z0=tf.zeros(shape=(1,1,1, self.latent_size)) #reference latent code
+            i=0
             
+            avg_mean_lpips, avg_max_lpips, avg_min_lpips = np.zeros(batch_size),np.zeros(batch_size),np.zeros(batch_size)
+            avg_mean_ssim, avg_max_ssim, avg_min_ssim = np.zeros(batch_size),np.zeros(batch_size),np.zeros(batch_size)
+            avg_mean_div, avg_max_div, avg_min_div = np.zeros(batch_size),np.zeros(batch_size),np.zeros(batch_size)
+            
+            for phone_path, dslr_path in zip(phone_paths, dslr_paths):
+                x_true = plt.imread(phone_path).astype(np.float)
+                x_true = x_true/255
+                x = np.expand_dims(x_true, axis=0) #form needed to pass to the network 
+                x = tf.convert_to_tensor(x)
+                
+                y_true = plt.imread(dslr_path).astype(np.float)
+                y_true = y_true/255
+                y_true_nd_array = np.expand_dims(y_true, axis=0)
+                y_true_tensor = tf.convert_to_tensor(y_true_nd_array, dtype=tf.float32)
+                
+                lpips_min, lpips_mean, lpips_max = 1e8,0,-1e8
+                ssim_min, ssim_mean, ssim_max = 1e8,0,-1e8
+                div_min, div_mean, div_max = 1e8,0,-1e8
+                
+                with tf.device('/GPU:0'):
+                    y_ref = self.model([x,z0])
+                    self.lpips.set_reference(y_true_tensor, clear=False) #reference=0
+                    self.lpips.set_reference(y_ref, clear=False) #reference=1
+                    for j in range(num_out_imgs):
+                        z = tf.random.normal(shape=(1,1,1, self.latent_size))
+                        y_pred_tensor = self.model([x,z])
+                        lpips_val = self.lpips.distance(y_pred_tensor, 0)
+                        lpips_mean+=lpips_val
+                        if lpips_val<lpips_min:
+                            lpips_min = lpips_val
+                        if lpips_val>lpips_max:
+                            lpips_max = lpips_val
+                        
+                        div_val = self.lpips.distance(y_pred_tensor, 1)
+                        div_mean+=div_val
+                        if div_val<div_min:
+                            div_min = div_val
+                        if div_val>div_max:
+                            div_max = div_val
+                            
+                        y_pred_nd_array = np.array(y_pred_tensor)
+                        ssim_val = ssim(y_pred_nd_array[0],y_true_nd_array[0], multichannel=True)    
+                        ssim_mean+=ssim_val
+                        if ssim_val<ssim_min:
+                            ssim_min = ssim_val
+                        if ssim_val>ssim_max:
+                            ssim_max = ssim_val
+                    
+                    self.lpips.clear_reference()
+                    
+                lpips_mean /= num_out_imgs
+                ssim_mean /= num_out_imgs
+                div_mean /= num_out_imgs
+                
+                avg_min_lpips[i]=lpips_min
+                avg_mean_lpips[i]=lpips_mean
+                avg_max_lpips[i]=lpips_max
+                
+                avg_min_ssim[i]=ssim_min
+                avg_mean_ssim[i]=ssim_mean
+                avg_max_ssim[i]=ssim_max
+                
+                avg_min_div[i]=div_min
+                avg_mean_div[i]=div_mean
+                avg_max_div[i]=div_max
+                        
+                i+=1
+            
+            avg_min_lpips = np.mean(avg_min_lpips)
+            avg_mean_lpips = np.mean(avg_mean_lpips)
+            avg_max_lpips = np.mean(avg_max_lpips)
+            
+            avg_min_ssim = np.mean(avg_min_ssim)
+            avg_mean_ssim = np.mean(avg_mean_ssim)
+            avg_max_ssim = np.mean(avg_max_ssim)
+            
+            avg_min_div = np.mean(avg_min_div)
+            avg_mean_div = np.mean(avg_mean_div)
+            avg_max_div = np.mean(avg_max_div)
+            
+            info={}
+            
+            info['avg_min_lpips'] = avg_min_lpips
+            info['avg_mean_lpips'] = avg_mean_lpips
+            info['avg_max_lpips'] = avg_max_lpips
+            
+            print('avg_min_lpips : %.3f - avg_mean_lpips: %.4f - avg_max_lpips: %.3f' % 
+                  (info['avg_min_lpips'], info['avg_mean_lpips'], info['avg_max_lpips']))
+            
+            info['avg_min_ssim'] = avg_min_ssim
+            info['avg_mean_ssim'] = avg_mean_ssim
+            info['avg_max_ssim'] = avg_max_ssim
+            
+            print('avg_min_ssim : %.3f - avg_mean_ssim: %.4f - avg_max_ssim: %.3f' % 
+                  (info['avg_min_ssim'], info['avg_mean_ssim'], info['avg_max_ssim']))
+            
+            info['avg_min_div'] = avg_min_div
+            info['avg_mean_div'] = avg_mean_div
+            info['avg_max_div'] = avg_max_div
+            
+            print('avg_min_div : %.3f - avg_mean_div: %.4f - avg_max_div: %.3f' % 
+                  (info['avg_min_div'], info['avg_mean_div'], info['avg_max_div']))
+            
+            return info
+        
         else:
             return Exception('test type not valid')
             

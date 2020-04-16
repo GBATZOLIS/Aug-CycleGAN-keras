@@ -109,11 +109,19 @@ class AugCycleGAN(object):
         #on the entire test dataset using 20 output images for each image
         #We want to get as less noisy estimation of the performance of the model as possible
         #The first list holds the sample interval measurements, the second holds the ep measurements
-        self.train_info['performance']['ssim_mean']=[[],[]]
-        self.train_info['performance']['ssim_std']=[[],[]]
-        self.train_info['performance']['lpips_mean']=[[],[]]
-        self.train_info['performance']['lpips_std']=[[],[]]
-        self.train_info['performance']['diversity']=[[],[]]
+      
+        self.train_info['performance']['avg_min_lpips']=[[],[]]
+        self.train_info['performance']['avg_mean_lpips']=[[],[]]
+        self.train_info['performance']['avg_max_lpips']=[[],[]]
+        
+        self.train_info['performance']['avg_min_ssim']=[[],[]]
+        self.train_info['performance']['avg_mean_ssim']=[[],[]]
+        self.train_info['performance']['avg_max_ssim']=[[],[]]
+        
+        self.train_info['performance']['avg_min_div']=[[],[]]
+        self.train_info['performance']['avg_mean_div']=[[],[]]
+        self.train_info['performance']['avg_max_div']=[[],[]]
+        
 
 
         #configure data loader
@@ -492,59 +500,63 @@ class AugCycleGAN(object):
                                  'sup_a', sup_a, 'sup_b', sup_b, 
                                  'ppl_AB', 0,
                                  'ppl_BA', 0,
-                                 'ms_AB',self.train_info['losses']['reg']['ms_G_AB'],
-                                 'ms_BA',self.train_info['losses']['reg']['ms_G_BA'],
+                                 'ms_AB',self.train_info['losses']['reg']['ms_G_AB'][-1],
+                                 'ms_BA',self.train_info['losses']['reg']['ms_G_BA'][-1],
                                  elapsed_time))
     
-                    if batch % 100 == 0 and not(batch==0 and epoch==0):
+                    if batch % 20 == 0 and not(batch==0 and epoch==0):
                         training_point = np.around(epoch+batch/self.data_loader.n_batches, 4)
                         self.train_info['performance']['eval_points'].append(training_point)
                         dynamic_evaluator.model = self.G_AB_EMA
                         #Perception and distortion evaluation
                         
                         time_start=time.time()
-                        info = dynamic_evaluator.test(batch_size=100, num_out_imgs=10, training_point=training_point, test_type='mixed')
+                        info = dynamic_evaluator.test(batch_size=15, num_out_imgs=20, training_point=training_point, test_type='mixed')
                         mixed_duration = time.time()-time_start
                         print('Mixed Evaluation took %.3f seconds' % mixed_duration)
                         
-                        time_start=time.time()
-                        diversity = dynamic_evaluator.test(batch_size=50, num_out_imgs=50,training_point=training_point, test_type='diversity')
-                        diversity_duration = time.time()-time_start
-                        print('Diversity Evaluation took %.3f seconds' % diversity_duration)
+                        self.train_info['performance']['avg_min_lpips'][0].append(info['avg_min_lpips'])
+                        self.train_info['performance']['avg_mean_lpips'][0].append(info['avg_mean_lpips'])
+                        self.train_info['performance']['avg_max_lpips'][0].append(info['avg_max_lpips'])
                         
-                        self.train_info['performance']['ssim_mean'][0].append(info['ssim_mean'])
-                        self.train_info['performance']['ssim_std'][0].append(info['ssim_std'])
-                        self.train_info['performance']['lpips_mean'][0].append(info['lpips_mean'])
-                        self.train_info['performance']['lpips_std'][0].append(info['lpips_std'])
-                        self.train_info['performance']['diversity'][0].append(diversity)
+                        self.train_info['performance']['avg_min_ssim'][0].append(info['avg_min_ssim'])
+                        self.train_info['performance']['avg_mean_ssim'][0].append(info['avg_mean_ssim'])
+                        self.train_info['performance']['avg_max_ssim'][0].append(info['avg_max_ssim'])
+                        
+                        self.train_info['performance']['avg_min_div'][0].append(info['avg_min_div'])
+                        self.train_info['performance']['avg_mean_div'][0].append(info['avg_mean_div'])
+                        self.train_info['performance']['avg_max_div'][0].append(info['avg_max_div'])
                         
                         plt.figure(figsize=(21,15))
-                        plt.title('diversity')
-                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['diversity'][0])
+                        plt.title('Diversity')
+                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_min_div'][0], label='min')
+                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_mean_div'][0], label='mean')
+                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_max_div'][0], label='max')
+                        plt.legend()
                         plt.savefig('progress/diversity/diversity.png', bbox_inches='tight')
                         
                         plt.figure(figsize=(21,15))
-                        plt.title('SSIM (100x10)')
-                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['ssim_mean'][0], label='mean')
-                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['ssim_std'][0], label='std')
+                        plt.title('SSIM')
+                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_min_ssim'][0], label='min')
+                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_mean_ssim'][0], label='mean')
+                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_max_ssim'][0], label='max')
                         plt.legend()
                         plt.savefig('progress/distortion/SSIM.png', bbox_inches='tight')
                         
                         
                         plt.figure(figsize=(21,15))
-                        plt.title('LPIPS (100x10)')
-                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['lpips_mean'][0], label='mean')
-                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['lpips_std'][0], label='std')
+                        plt.title('LPIPS')
+                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_min_lpips'][0], label='min')
+                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_mean_lpips'][0], label='mean')
+                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_max_lpips'][0], label='max')
                         plt.legend()
                         plt.savefig('progress/perception/LPIPS.png', bbox_inches='tight')
-                        plt.close('all')
                         
+                        plt.close('all')
                         
                         #save the generators
                         self.G_AB_EMA.save("models/G_AB_all/G_AB_{}_{}.h5".format(epoch, batch))
-                        #save the tensorboard values
-                        with open('progress/training_information/'+ 'train_info' + '.pkl', 'wb') as f:
-                            pickle.dump(self.train_info, f, pickle.HIGHEST_PROTOCOL)
+                        
                     
                     if batch % 100 ==0 and epoch % 10==0:
                         self.EMA_init() #restart the G_AB_EMA from the current state of the G_AB
@@ -554,30 +566,51 @@ class AugCycleGAN(object):
                 #Perception and distortion evaluation on the entire test dataset
                 info = dynamic_evaluator.test(batch_size=400, num_out_imgs=20, training_point=training_point, test_type='mixed')
                 
-                self.train_info['performance']['ssim_mean'][1].append(info['ssim_mean'])
-                self.train_info['performance']['ssim_std'][1].append(info['ssim_std'])
+                self.train_info['performance']['avg_min_lpips'][1].append(info['avg_min_lpips'])
+                self.train_info['performance']['avg_mean_lpips'][1].append(info['avg_mean_lpips'])
+                self.train_info['performance']['avg_max_lpips'][1].append(info['avg_max_lpips'])
                 
-                self.train_info['performance']['lpips_mean'][1].append(info['lpips_mean'])
-                self.train_info['performance']['lpips_std'][1].append(info['lpips_std'])
+                self.train_info['performance']['avg_min_ssim'][1].append(info['avg_min_ssim'])
+                self.train_info['performance']['avg_mean_ssim'][1].append(info['avg_mean_ssim'])
+                self.train_info['performance']['avg_max_ssim'][1].append(info['avg_max_ssim'])
+                
+                self.train_info['performance']['avg_min_div'][1].append(info['avg_min_div'])
+                self.train_info['performance']['avg_mean_div'][1].append(info['avg_mean_div'])
+                self.train_info['performance']['avg_max_div'][1].append(info['avg_max_div'])
                 
                 plt.figure(figsize=(21,15))
-                plt.title('SSIM (test dataset)')
-                plt.plot(self.train_info['performance']['ssim_mean'][1], label='mean')
-                plt.plot(self.train_info['performance']['ssim_std'][1], label='std')
+                plt.title('Diversity')
+                plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_min_div'][1], label='min')
+                plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_mean_div'][1], label='mean')
+                plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_max_div'][1], label='max')
+                plt.legend()
+                plt.savefig('progress/diversity/diversity_epoch.png', bbox_inches='tight')
+                
+                plt.figure(figsize=(21,15))
+                plt.title('SSIM')
+                plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_min_ssim'][1], label='min')
+                plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_mean_ssim'][1], label='mean')
+                plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_max_ssim'][1], label='max')
                 plt.legend()
                 plt.savefig('progress/distortion/SSIM_epoch.png', bbox_inches='tight')
                 
                 
                 plt.figure(figsize=(21,15))
-                plt.title('LPIPS (test dataset)')
-                plt.plot(self.train_info['performance']['lpips_mean'][1], label='mean')
-                plt.plot(self.train_info['performance']['lpips_std'][1], label='std')
+                plt.title('LPIPS')
+                plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_min_lpips'][1], label='min')
+                plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_mean_lpips'][1], label='mean')
+                plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_max_lpips'][1], label='max')
                 plt.legend()
                 plt.savefig('progress/perception/LPIPS_epoch.png', bbox_inches='tight')
-                plt.close('all')
                 
+                plt.close('all')
+                        
                 #save the models to intoduce resume capacity to training
                 self.save_models(epoch)
+                
+                #save the tensorboard values
+                with open('progress/training_information/'+ 'train_info' + '.pkl', 'wb') as f:
+                    pickle.dump(self.train_info, f, pickle.HIGHEST_PROTOCOL)
             
         except KeyboardInterrupt:
             print('Training has been terminated manually')
@@ -626,7 +659,7 @@ class AugCycleGAN(object):
             
             
 model = AugCycleGAN((100,100,3), (1,1,4), resume=False)
-model.train(epochs=100, batch_size = 20)
+model.train(epochs=100, batch_size = 1)
         
 
         
