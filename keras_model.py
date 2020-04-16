@@ -504,14 +504,14 @@ class AugCycleGAN(object):
                                  'ms_BA',self.train_info['losses']['reg']['ms_G_BA'][-1],
                                  elapsed_time))
     
-                    if batch % 20 == 0 and not(batch==0 and epoch==0):
+                    if batch % 100 == 0 and not(batch==0 and epoch==0):
                         training_point = np.around(epoch+batch/self.data_loader.n_batches, 4)
                         self.train_info['performance']['eval_points'].append(training_point)
                         dynamic_evaluator.model = self.G_AB_EMA
                         #Perception and distortion evaluation
                         
                         time_start=time.time()
-                        info = dynamic_evaluator.test(batch_size=15, num_out_imgs=20, training_point=training_point, test_type='mixed')
+                        info = dynamic_evaluator.test(batch_size=100, num_out_imgs=20, training_point=training_point, test_type='mixed')
                         mixed_duration = time.time()-time_start
                         print('Mixed Evaluation took %.3f seconds' % mixed_duration)
                         
@@ -564,7 +564,7 @@ class AugCycleGAN(object):
                 
                 dynamic_evaluator.model = self.G_AB_EMA #set the current G_AB_EMA model for evaluation
                 #Perception and distortion evaluation on the entire test dataset
-                info = dynamic_evaluator.test(batch_size=400, num_out_imgs=20, training_point=training_point, test_type='mixed')
+                info = dynamic_evaluator.test(batch_size=300, num_out_imgs=30, training_point=training_point, test_type='mixed')
                 
                 self.train_info['performance']['avg_min_lpips'][1].append(info['avg_min_lpips'])
                 self.train_info['performance']['avg_mean_lpips'][1].append(info['avg_mean_lpips'])
@@ -659,7 +659,7 @@ class AugCycleGAN(object):
             
             
 model = AugCycleGAN((100,100,3), (1,1,4), resume=False)
-model.train(epochs=100, batch_size = 1)
+model.train(epochs=100, batch_size = 20)
         
 
         
