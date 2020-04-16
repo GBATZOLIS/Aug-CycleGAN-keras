@@ -127,17 +127,45 @@ class evaluator(object):
             info['lpips_mean'] = np.mean(lpips_vals)
             info['lpips_std'] = np.std(lpips_vals)
             
-            print('lpips_mean : %.3f - lpips_std: %.3f' % 
+            print('lpips_mean : %.4f - lpips_std: %.3f' % 
                   (info['lpips_mean'], info['lpips_std']))
             
             info['ssim_mean'] = np.mean(ssim_vals)
             info['ssim_std'] = np.std(ssim_vals)
             
-            print('ssim_mean : %.3f - ssim_std: %.3f' % 
+            print('ssim_mean : %.4f - ssim_std: %.3f' % 
                   (info['ssim_mean'], info['ssim_std']))
             
             return info
         
+        elif test_type=='diversity':
+            i=0
+            avg_ref_distances=np.zeros(batch_size)
+            for phone_path in phone_paths:
+                x_true = plt.imread(phone_path).astype(np.float)
+                x_true = x_true/255
+                x = np.expand_dims(x_true, axis=0) #form needed to pass to the network 
+                x = tf.convert_to_tensor(x)
+                
+                
+                ref_distances = np.zeros(num_out_imgs)
+                with tf.device('/GPU:0'):
+                    z0=tf.zeros(shape=(1,1,1, self.latent_size))
+                    y_ref = self.model([x,z0])
+                    self.lpips.set_reference(y_ref)
+                    for j in range(num_out_imgs):
+                        z = tf.random.normal(shape=(1,1,1, self.latent_size))
+                        y_pred = self.model([x,z])
+                        ref_distances[j] = self.lpips.distance(y_pred)
+                
+                avg_ref_distance = np.mean(ref_distances)
+                avg_ref_distances[i]=avg_ref_distance
+                i+=1
+            
+            avg_lpips_distance = np.mean(avg_ref_distances)
+            print('diversity: %.4f' % avg_lpips_distance)
+            return avg_lpips_distance
+            
         else:
             return Exception('test type not valid')
             

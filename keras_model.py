@@ -12,6 +12,7 @@ Created on Fri Feb 28 17:04:32 2020
 
 #laod required modules
 import datetime
+import time
 import numpy as np
 import os
 import pickle
@@ -112,6 +113,7 @@ class AugCycleGAN(object):
         self.train_info['performance']['ssim_std']=[[],[]]
         self.train_info['performance']['lpips_mean']=[[],[]]
         self.train_info['performance']['lpips_std']=[[],[]]
+        self.train_info['performance']['diversity']=[[],[]]
 
 
         #configure data loader
@@ -472,11 +474,12 @@ class AugCycleGAN(object):
                     
                     sup_a, sup_b = self.supervised_step(sup_img_A, sup_img_B)
                     
-                    
-                    if batch % 5==0 and not(batch==0 and epoch==0):
-                        self.ppl_regularisation(img_A, img_B)
                         
-
+                    
+                    if batch % 5 == 0 and not(batch==0 and epoch==0):
+                        self.mode_seeking_regularisation(img_A, img_B)
+                        
+                        
                     #generate the noise vectors from the N(0,sigma^2) distribution
                     if batch % 10 == 0 and not(batch==0 and epoch==0):
                         self.EMA() #update the inference model with exponential moving average
@@ -487,10 +490,10 @@ class AugCycleGAN(object):
                                  'D_A', D_A_loss, 'D_B', D_B_loss, 'D_Za', D_Za_loss, 'D_Zb', D_Zb_loss,
                                  'cyc_A_Zb', cycle_A_Zb_loss, 'cyc_B_Za', cycle_B_Za_loss,
                                  'sup_a', sup_a, 'sup_b', sup_b, 
-                                 'ppl_AB', self.train_info['losses']['reg']['ppl_G_AB'][-1],
-                                 'ppl_BA', self.train_info['losses']['reg']['ppl_G_AB'][-1],
-                                 'ms_AB',0,
-                                 'ms_BA',0,
+                                 'ppl_AB', 0,
+                                 'ppl_BA', 0,
+                                 'ms_AB',self.train_info['losses']['reg']['ms_G_AB'],
+                                 'ms_BA',self.train_info['losses']['reg']['ms_G_BA'],
                                  elapsed_time))
     
                     if batch % 100 == 0 and not(batch==0 and epoch==0):
@@ -498,13 +501,27 @@ class AugCycleGAN(object):
                         self.train_info['performance']['eval_points'].append(training_point)
                         dynamic_evaluator.model = self.G_AB_EMA
                         #Perception and distortion evaluation
-                        info = dynamic_evaluator.test(batch_size=200, num_out_imgs=10, training_point=training_point, test_type='mixed')
                         
+                        time_start=time.time()
+                        info = dynamic_evaluator.test(batch_size=100, num_out_imgs=10, training_point=training_point, test_type='mixed')
+                        mixed_duration = time.time()-time_start
+                        print('Mixed Evaluation took %.3f seconds' % mixed_duration)
+                        
+                        time_start=time.time()
+                        diversity = dynamic_evaluator.test(batch_size=50, num_out_imgs=50,training_point=training_point, test_type='diversity')
+                        diversity_duration = time.time()-time_start
+                        print('Diversity Evaluation took %.3f seconds' % diversity_duration)
                         
                         self.train_info['performance']['ssim_mean'][0].append(info['ssim_mean'])
                         self.train_info['performance']['ssim_std'][0].append(info['ssim_std'])
                         self.train_info['performance']['lpips_mean'][0].append(info['lpips_mean'])
                         self.train_info['performance']['lpips_std'][0].append(info['lpips_std'])
+                        self.train_info['performance']['diversity'][0].append(diversity)
+                        
+                        plt.figure(figsize=(21,15))
+                        plt.title('diversity')
+                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['diversity'][0])
+                        plt.savefig('progress/diversity/diversity.png', bbox_inches='tight')
                         
                         plt.figure(figsize=(21,15))
                         plt.title('SSIM (100x10)')
@@ -608,8 +625,8 @@ class AugCycleGAN(object):
                 
             
             
-model = AugCycleGAN((100,100,3), (1,1,2), resume=False)
-model.train(epochs=100, batch_size = 1)
+model = AugCycleGAN((100,100,3), (1,1,4), resume=False)
+model.train(epochs=100, batch_size = 20)
         
 
         
