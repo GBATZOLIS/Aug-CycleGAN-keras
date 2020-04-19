@@ -289,7 +289,7 @@ class latent_explorer(object):
         self.img_shape = img_shape
         self.latent_size = latent_size
         self.model = G_AB(img_shape, (1,1,latent_size))
-        self.model.load_weights('models/G_AB_6_650.h5')
+        self.model.load_weights('models/G_AB_17.h5')
         
         #instantiate the LPIPS loss object
         self.lpips = lpips(self.img_shape)
@@ -309,7 +309,7 @@ class latent_explorer(object):
                 z_start=np.expand_dims(z_start, axis=0)
                 
             
-            for i in tqdm(range(500)):
+            for i in tqdm(range(400)):
                 z_new=z_start+0.05*np.random.randn(1,1,1,self.latent_size)
                 z_start=z_new
                 fake_b = self.model_func(a, z_new)
@@ -324,7 +324,7 @@ class latent_explorer(object):
         
         elif gif_type=='normal':
             images=[]
-            for i in tqdm(range(500)):
+            for i in range(300):
                 z=np.array(tf.random.truncated_normal(shape=(1,1,1,self.latent_size)))
                 #z = np.random.randn(1,1,1,self.latent_size)
                 fake_b = self.model_func(a, z)
@@ -334,7 +334,7 @@ class latent_explorer(object):
             images[0].save('progress/gif/random/%s.gif' % (str(name)),
                                         save_all=True, 
                                         append_images=images[::-1], 
-                                        optimize=False, duration=50, loop=0) 
+                                        optimize=False, duration=200, loop=0) 
             
         
     def mode_search(self, img_A, img_B, metric='lpips'):
@@ -392,6 +392,10 @@ names=[296,331,364,378,379,397,484,554,597,595,600,783,790,
        833, 839, 847, 849, 850, 885, 913, 936, 939, 1034, 1047, 1107, 1121, 1144, 1176, 1253,
        1300, 1372, 1384, 1428, 1443, 1494, 1528, 1607, 1628, 1660, 1671, 1701, 1705, 1755, 1776
        ]
+
+names=[296,331,364,378,379,397,484,554,597,595,600,783,790,
+       833, 839, 847, 849, 850, 885, 913, 936, 939, 1034, 1047, 1107, 1121, 1144, 1176, 1253,
+       1300, 1372, 1384, 1428, 1443, 1494, 1528, 1607, 1628, 1660, 1671, 1701, 1705, 1755, 1776]
 
 
 for i in tqdm(names):
