@@ -7,7 +7,7 @@ Created on Sat Feb 29 17:56:58 2020
 
 from tensorflow.keras.layers import Input, Concatenate, Reshape
 from tensorflow.keras.models import Model
-from keras_modules import CINResnetGenerator, LatentEncoder, img_domain_critic, noise_domain_critic, noise_mapping_func
+from keras_modules import CINResnetGenerator, LatentEncoder, styleGAN_disc, img_domain_critic, noise_domain_critic, noise_mapping_func
 from tensorflow.python.keras.engine.network import Network
 
     
@@ -16,14 +16,14 @@ from tensorflow.python.keras.engine.network import Network
 def G_AB(img_shape, latent_shape):
     image = Input(img_shape)
     noise = Input(latent_shape)
-    output = CINResnetGenerator(image, noise, ngf=32, nlatent=latent_shape[-1])
+    output = CINResnetGenerator(image, noise, filters=16, nlatent=latent_shape[-1])
     model = Model(inputs=[image, noise], outputs=output, name='GAB')
     return model
 
 def G_BA(img_shape, latent_shape):
     image = Input(img_shape)
     noise = Input(latent_shape)
-    output = CINResnetGenerator(image, noise, ngf=32, nlatent=latent_shape[-1])
+    output = CINResnetGenerator(image, noise, filters=16, nlatent=latent_shape[-1])
     model = Model(inputs=[image, noise], outputs=output, name='GBA')
     return model
 
@@ -45,13 +45,13 @@ def E_B(img_shape, latent_shape):
 
 def D_A(img_shape):
     img=Input(img_shape)
-    result = img_domain_critic(img)
+    result = styleGAN_disc(img)
     model = Model(inputs=img, outputs=result, name='DA')
     return model
 
 def D_B(img_shape):
     img=Input(img_shape)
-    result = img_domain_critic(img)
+    result = styleGAN_disc(img)
     model = Model(inputs=img, outputs=result, name='DB')
     return model
 

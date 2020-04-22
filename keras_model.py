@@ -473,20 +473,19 @@ class AugCycleGAN(object):
         
                     
                         
-                    for i in range(2):
-                        z_a = tf.random.normal((batch_size, 1, 1, self.latent_shape[-1]), dtype=tf.float32)
-                        z_b = tf.random.normal((batch_size, 1, 1, self.latent_shape[-1]), dtype=tf.float32)
-                        
-                        D_B_loss, D_Za_loss, cycle_A_Zb_loss = self.step_cycle_A(img_A, img_B, z_a, z_b)
-                        D_A_loss, D_Zb_loss, cycle_B_Za_loss = self.step_cycle_B(img_A, img_B, z_a, z_b)
+                    z_a = tf.random.normal((batch_size, 1, 1, self.latent_shape[-1]), dtype=tf.float32)
+                    z_b = tf.random.normal((batch_size, 1, 1, self.latent_shape[-1]), dtype=tf.float32)
+                    
+                    D_B_loss, D_Za_loss, cycle_A_Zb_loss = self.step_cycle_A(img_A, img_B, z_a, z_b)
+                    D_A_loss, D_Zb_loss, cycle_B_Za_loss = self.step_cycle_B(img_A, img_B, z_a, z_b)
                     
                     sup_a, sup_b = self.supervised_step(sup_img_A, sup_img_B)
                     
                         
-                    
+                    """
                     if batch % 5 == 0 and not(batch==0 and epoch==0):
                         self.mode_seeking_regularisation(img_A, img_B)
-                        
+                    """
                         
                     #generate the noise vectors from the N(0,sigma^2) distribution
                     if batch % 10 == 0 and not(batch==0 and epoch==0):
@@ -500,8 +499,8 @@ class AugCycleGAN(object):
                                  'sup_a', sup_a, 'sup_b', sup_b, 
                                  'ppl_AB', 0,
                                  'ppl_BA', 0,
-                                 'ms_AB',self.train_info['losses']['reg']['ms_G_AB'][-1],
-                                 'ms_BA',self.train_info['losses']['reg']['ms_G_BA'][-1],
+                                 'ms_AB',0,
+                                 'ms_BA',0,
                                  elapsed_time))
     
                     if batch % 100 == 0 and not(batch==0 and epoch==0):
@@ -659,7 +658,7 @@ class AugCycleGAN(object):
             
             
 model = AugCycleGAN((100,100,3), (1,1,4), resume=False)
-model.train(epochs=100, batch_size = 20)
+model.train(epochs=100, batch_size = 1)
         
 
         
