@@ -289,18 +289,23 @@ class latent_explorer(object):
         self.img_shape = img_shape
         self.latent_size = latent_size
         self.model = G_AB(img_shape, (1,1,latent_size))
-        self.model.load_weights('models/G_AB_17.h5')
+        self.model.load_weights('models/G_AB_41.h5')
         
         #instantiate the LPIPS loss object
         self.lpips = lpips(self.img_shape)
         self.lpips.create_model()
         
         self.gif_images=None
+    
+    
+    def report(self, name, a, ref=None):
+        return 0
+        
         
     def model_func(self, img, latent):
         return self.model.predict([img,latent])[0]
     
-    def create_gif(self, a, b, name, start=0, gif_type='random_walk'):
+    def create_gif(self, name, a, ref=0, start=0, gif_type='random_walk'):
         if gif_type=='random_walk':
             images=[]
             
@@ -309,32 +314,41 @@ class latent_explorer(object):
                 z_start=np.expand_dims(z_start, axis=0)
                 
             
-            for i in tqdm(range(400)):
+            for i in tqdm(range(200)):
                 z_new=z_start+0.05*np.random.randn(1,1,1,self.latent_size)
                 z_start=z_new
                 fake_b = self.model_func(a, z_new)
-                frame = Image.fromarray((np.concatenate((np.squeeze(a,axis=0), fake_b, b), axis=1) * 255).astype(np.uint8))
+                if type(ref)==int:
+                    frame = Image.fromarray((np.concatenate((np.squeeze(a,axis=0), fake_b), axis=1) * 255).astype(np.uint8)) 
+                else:
+                    frame = Image.fromarray((np.concatenate((np.squeeze(a,axis=0), fake_b, ref), axis=1) * 255).astype(np.uint8))
+                
                 images.append(frame)
             
             print(np.linalg.norm(np.squeeze(z_start-start), ord=2))
             images[0].save('progress/gif/random/%s.gif' % (str(name)),
                                         save_all=True, 
                                         append_images=images[::-1], 
-                                        optimize=False, duration=50, loop=1) 
+                                        optimize=False, duration=80, loop=1) 
         
         elif gif_type=='normal':
             images=[]
-            for i in range(300):
+            for i in range(100):
                 z=np.array(tf.random.truncated_normal(shape=(1,1,1,self.latent_size)))
                 #z = np.random.randn(1,1,1,self.latent_size)
                 fake_b = self.model_func(a, z)
-                frame = Image.fromarray((np.concatenate((np.squeeze(a,axis=0), fake_b, b), axis=1) * 255).astype(np.uint8))
+                
+                if type(ref)==int:
+                    frame = Image.fromarray((np.concatenate((np.squeeze(a,axis=0), fake_b), axis=1) * 255).astype(np.uint8)) 
+                else:
+                    frame = Image.fromarray((np.concatenate((np.squeeze(a,axis=0), fake_b, ref), axis=1) * 255).astype(np.uint8))
+                
                 images.append(frame)
             
             images[0].save('progress/gif/random/%s.gif' % (str(name)),
                                         save_all=True, 
                                         append_images=images[::-1], 
-                                        optimize=False, duration=200, loop=0) 
+                                        optimize=False, duration=100, loop=0) 
             
         
     def mode_search(self, img_A, img_B, metric='lpips'):
@@ -383,6 +397,29 @@ class latent_explorer(object):
         
         return min_val, cost
 
+
+def get_random_patch(img, patch_dimension):
+    if img.shape[0]==patch_dimension[0] and img.shape[1]==patch_dimension[1]:
+        return img
+        
+    else:
+        image_shape=img.shape
+        image_length = img.shape[0]
+        image_width = img.shape[1]
+        patch_length = patch_dimension[0]
+        patch_width = patch_dimension[1]
+            
+        if (image_length >= patch_length) and (image_width >= patch_width):
+            x_max=image_shape[0]-patch_dimension[0]
+            y_max=image_shape[1]-patch_dimension[1]
+            x_index=np.random.randint(x_max)
+            y_index=np.random.randint(y_max)
+        else:
+            print("Error. Not valid patch dimensions")
+        
+        return img[x_index:x_index+patch_dimension[0], y_index:y_index+patch_dimension[1], :]
+    
+
 latent_exp = latent_explorer((100,100,3), 4)
 
 
@@ -390,24 +427,26 @@ latent_exp = latent_explorer((100,100,3), 4)
 
 names=[296,331,364,378,379,397,484,554,597,595,600,783,790,
        833, 839, 847, 849, 850, 885, 913, 936, 939, 1034, 1047, 1107, 1121, 1144, 1176, 1253,
-       1300, 1372, 1384, 1428, 1443, 1494, 1528, 1607, 1628, 1660, 1671, 1701, 1705, 1755, 1776
+       1300, 1372, 1384, 1428, 1443, 1494, 1528, 1607, 1628, 1660, 1671, 1701, 1705, 1755, 1776, 2047
        ]
 
-names=[296,331,364,378,379,397,484,554,597,595,600,783,790,
-       833, 839, 847, 849, 850, 885, 913, 936, 939, 1034, 1047, 1107, 1121, 1144, 1176, 1253,
-       1300, 1372, 1384, 1428, 1443, 1494, 1528, 1607, 1628, 1660, 1671, 1701, 1705, 1755, 1776]
 
 
-for i in tqdm(names):
-    x_true = plt.imread('data/testA/%s.jpg'% str(i)).astype(np.float)
+#names=[0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,6,6,6,6,7,7,7,7,8,8,8,8,9,9,9,9,10,10,10,10,11,11,11,11]
+
+
+for counter, name in tqdm(enumerate(names)):
+    print(name)
+    x_true = plt.imread('data/testA/%s.jpg'% str(name)).astype(np.float)
     x_true = x_true/255
+    #x_true = get_random_patch(x_true, (300,300))
     x = np.expand_dims(x_true, axis=0)
         
-    y_true = plt.imread('data/testB/%s.jpg'% str(i)).astype(np.float)
-    y_true = y_true/255
+    #y_true = plt.imread('data/testB/%s.jpg'% str(i)).astype(np.float)
+    #y_true = y_true/255
     
     #opt_loc, opt_value=latent_exp.mode_search(x,y_true, metric='lpips')
-    latent_exp.create_gif(x, y_true, i, start=0, gif_type='normal')
+    latent_exp.create_gif(name, x, start=0, gif_type='normal')
 
 
 

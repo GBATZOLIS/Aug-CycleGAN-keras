@@ -76,7 +76,6 @@ def CINResnetBlock(image, noise, filters):
 def CINResnetGenerator(image, noise, ngf, nlatent):
     #ngf: number of generator filters
     #nlatent: the dimensionality of the latent space
-    
     """
     def g_block(inp, istyle, filters):
         init = RandomNormal(stddev=0.02)
@@ -97,16 +96,25 @@ def CINResnetGenerator(image, noise, ngf, nlatent):
     
     latent = Reshape((nlatent,))(noise)
     outs = []
+    
+    image = Lambda(lambda x: 2*x - 1, output_shape=lambda x:x)(image)
+    
 
     out=image
+    outs.append(out)
     
-    for i in range(4):
+    for i in range(5):
         out, rgb_out = g_block(inp=out, istyle=latent, filters=64)
         outs.append(rgb_out)
     
     out_image = add(outs)
-    """
     
+    out_image = Activation('tanh')(out_image)
+    out_image = Lambda(lambda x: 0.5*x + 0.5, output_shape=lambda x:x)(out_image)
+    
+    return out_image
+    """
+
     init = RandomNormal(stddev=0.02)
     
     noise = Reshape((nlatent,))(noise)
@@ -137,6 +145,7 @@ def CINResnetGenerator(image, noise, ngf, nlatent):
     image = Lambda(lambda x: 0.5*x + 0.5, output_shape=lambda x:x)(image)
     
     return image
+    
     
 #--------------------------------------------------------------------------------------------------------------------   
 
