@@ -31,7 +31,7 @@ def E_A(img_shape, latent_shape):
     imgA = Input(img_shape)
     imgB = Input(img_shape)
     concat_A_B = Concatenate(axis=-1)([imgA, imgB])
-    encoding = LatentEncoder(concat_A_B, nef=32, z_dim = latent_shape[-1])
+    encoding = LatentEncoder(concat_A_B, nef=16, z_dim = latent_shape[-1])
     model = Model(inputs=[imgA, imgB], outputs=encoding, name='EA')
     return model
 
@@ -39,7 +39,7 @@ def E_B(img_shape, latent_shape):
     imgA = Input(img_shape)
     imgB = Input(img_shape)
     concat_A_B = Concatenate(axis=-1)([imgA, imgB])
-    encoding = LatentEncoder(concat_A_B, nef=32, z_dim = latent_shape[-1])
+    encoding = LatentEncoder(concat_A_B, nef=16, z_dim = latent_shape[-1])
     model = Model(inputs=[imgA, imgB], outputs=encoding, name='EB')
     return model
 

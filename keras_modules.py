@@ -12,7 +12,7 @@ from tensorflow.keras.models import Model
 from tensorflow.python.keras.engine.network import Network
 from tensorflow.keras.optimizers import Adam
 
-
+from keras_custom_layers import SpectralNormalization
 
 import tensorflow as tf
 
@@ -186,11 +186,11 @@ def LatentEncoder(concat_A_B, nef, z_dim):
 def styleGAN_disc(img, cha=16):
     def d_block(inp, fil, p = True):
         init = RandomNormal(stddev=0.02)
-        res = Conv2D(fil, 1, kernel_initializer = init)(inp)
+        res = SpectralNormalization(Conv2D(fil, 1, kernel_initializer = init), dynamic=True)(inp)
     
-        out = Conv2D(filters = fil, kernel_size = 3, padding = 'same', kernel_initializer = init)(inp)
+        out = SpectralNormalization(Conv2D(filters = fil, kernel_size = 3, padding = 'same', kernel_initializer = init), dynamic=True)(inp)
         out = LeakyReLU(0.2)(out)
-        out = Conv2D(filters = fil, kernel_size = 3, padding = 'same', kernel_initializer = init)(out)
+        out = SpectralNormalization(Conv2D(filters = fil, kernel_size = 3, padding = 'same', kernel_initializer = init), dynamic=True)(out)
         out = LeakyReLU(0.2)(out)
     
         out = add([res, out])
@@ -203,13 +203,13 @@ def styleGAN_disc(img, cha=16):
     init = RandomNormal(stddev=0.02)
     
     x = d_block(img, 1 * cha) #100
-    x = d_block(img, 1 * cha, False) #100
+    #x = d_block(x, 1 * cha, False) #100
     x = d_block(x, 2 * cha) #50
-    x = d_block(x, 2 * cha, False) #50
+    #x = d_block(x, 2 * cha, False) #50
     x = d_block(x, 4 * cha) #25
-    x = d_block(x, 4 * cha, False) #25
+    #x = d_block(x, 4 * cha, False) #25
     x = d_block(x, 8 * cha) #13
-    x = d_block(x, 8 * cha, False) #13
+    #x = d_block(x, 8 * cha, False) #13
     x = d_block(x, 16 * cha) #7
     x = d_block(x, 16 * cha) #7
     
