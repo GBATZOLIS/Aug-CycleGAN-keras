@@ -5,15 +5,14 @@ Created on Sat Feb 29 18:04:27 2020
 @author: Georgios
 """
 
-from tensorflow.keras.layers import add, ZeroPadding2D, Reshape, Conv2D, Add, LeakyReLU, Activation, Input,DepthwiseConv2D, Dense, Lambda, BatchNormalization, Conv2DTranspose
+from tensorflow.keras.layers import add, ZeroPadding2D,AveragePooling2D, Reshape, Conv2D, Add, LeakyReLU, Activation, Input,DepthwiseConv2D, Dense, Lambda, BatchNormalization, Conv2DTranspose
 from tensorflow.keras.initializers import RandomNormal
 from tensorflow.keras.layers import Layer
 from tensorflow.keras.models import Model
 from tensorflow.python.keras.engine.network import Network
 from tensorflow.keras.optimizers import Adam
 
-
-from keras_custom_layers import AdaInstanceNormalization, InstanceNormalization
+from keras_custom_layers import SpectralNormalization
 
 import tensorflow as tf
 
@@ -61,9 +60,12 @@ def CINResnetBlock(image, noise, filters):
     def conv_block(image, noise, filters):
         init = RandomNormal(stddev=0.02)
         
-        style = Dense(image.shape[-1], kernel_initializer = init)(noise)
-        image = Conv2DMod(filters = filters, kernel_size = 3, padding = 'same', kernel_initializer = init)([image, style])
+        style1 = Dense(image.shape[-1], kernel_initializer = init)(noise)
+        image = Conv2DMod(filters = filters, kernel_size = 3, padding = 'same', kernel_initializer = init)([image, style1])
         image = LeakyReLU(alpha=0.2)(image)
+        
+        #image = Conv2D(filters = filters, kernel_size=3, padding='same', kernel_initializer = init)(image)
+        #image = LeakyReLU(alpha=0.2)(image)
         
         return image
     
@@ -73,79 +75,65 @@ def CINResnetBlock(image, noise, filters):
     
     return out_image
 
-def CINResnetGenerator(image, noise, ngf, nlatent):
-    #ngf: number of generator filters
-    #nlatent: the dimensionality of the latent space
-    """
-    def g_block(inp, istyle, filters):
-        init = RandomNormal(stddev=0.02)
-        
-        rgb_style = Dense(filters, kernel_initializer = init)(istyle)
-        
-        style1 = Dense(inp.shape[-1], kernel_initializer = init)(istyle)
-        out = Conv2DMod(filters = filters, kernel_size = 3, padding = 'same', kernel_initializer = init)([inp, style1])
-        out = LeakyReLU(0.2)(out)
-    
-        style2 = Dense(filters, kernel_initializer = init)(istyle)
-        out = Conv2DMod(filters = filters, kernel_size = 3, padding = 'same', kernel_initializer = init)([out, style2])
-        out = LeakyReLU(0.2)(out)
-        
-        rgb_out = Conv2DMod(3, 1, kernel_initializer = init, demod = False)([out, rgb_style])
-    
-        return out, rgb_out
-    
-    latent = Reshape((nlatent,))(noise)
-    outs = []
-    
-    image = Lambda(lambda x: 2*x - 1, output_shape=lambda x:x)(image)
-    
 
-    out=image
-    outs.append(out)
-    
-    for i in range(5):
-        out, rgb_out = g_block(inp=out, istyle=latent, filters=64)
-        outs.append(rgb_out)
-    
-    out_image = add(outs)
-    
-    out_image = Activation('tanh')(out_image)
-    out_image = Lambda(lambda x: 0.5*x + 0.5, output_shape=lambda x:x)(out_image)
-    
-    return out_image
-    """
-
+def CINResnetGenerator(image, noise, filters, nlatent):
+    def g_block(image, noise, filters):
+        style = Dense(image.shape[-1], kernel_initializer = init)(noise)
+        image = Conv2DMod(filters = filters, kernel_size = 3, padding = 'same', kernel_initializer = init)([image, style])
+        image = LeakyReLU(alpha=0.2)(image)
+        return image
+        
     init = RandomNormal(stddev=0.02)
     
     noise = Reshape((nlatent,))(noise)
     image = Lambda(lambda x: 2*x - 1, output_shape=lambda x:x)(image)
     
-    image = Conv2D(filters = ngf, kernel_size=7, padding='same', kernel_initializer = init)(image)
-    image = LeakyReLU(alpha=0.2)(image)
+    R1 = Conv2D(filters = filters, kernel_size=3, padding='same', kernel_initializer = init)(image)
+    R1_i = LeakyReLU(alpha=0.2)(R1)
     
-    image = Conv2D(filters = ngf, kernel_size=3, padding='same', kernel_initializer = init)(image)
-    image = LeakyReLU(alpha=0.2)(image)
+    R2 = Conv2D(filters = 2*filters, kernel_size=3, strides=2, padding='same', kernel_initializer = init)(R1_i)
+    R2_i = LeakyReLU(alpha=0.2)(R2)
     
-    image = Conv2D(filters = 2*ngf, kernel_size=3, padding='same', kernel_initializer = init)(image)
-    image = LeakyReLU(alpha=0.2)(image)
+    R3 = Conv2D(filters = 4*filters, kernel_size=3, strides=2, padding='same', kernel_initializer = init)(R2_i)
+    R3_i = LeakyReLU(alpha=0.2)(R3)
     
-    for i in range(5):
-        image = CINResnetBlock(image, noise, 2*ngf)
-
-    style4 = Dense(image.shape[-1], kernel_initializer = init)(noise)
-    image = Conv2DMod(filters = 2*ngf, kernel_size = 3, padding = 'same', kernel_initializer = init)([image, style4])
-    image = LeakyReLU(alpha=0.2)(image)
+    R4 = Conv2D(filters = 8*filters, kernel_size=3, strides=2, padding='valid', kernel_initializer = init)(R3_i)
+    R4_i = LeakyReLU(alpha=0.2)(R4)
     
-    style5 = Dense(image.shape[-1], kernel_initializer = init)(noise)
-    image = Conv2DMod(filters = ngf, kernel_size = 3, padding = 'same', kernel_initializer = init)([image, style5])
-    image = LeakyReLU(alpha=0.2)(image)
-       
-    image = Conv2D(filters = 3, kernel_size=7, padding='same', kernel_initializer = init)(image)
-    image = Activation('tanh')(image)
-    image = Lambda(lambda x: 0.5*x + 0.5, output_shape=lambda x:x)(image)
+    R4_o=R4_i
+    for i in range(3):
+        R4_o = g_block(R4_o, noise, 8*filters)
     
-    return image
+    R3_o = Conv2DTranspose(filters = 4*filters, kernel_size=3, strides=2, padding='valid', kernel_initializer=init)(R4_o)
+    R3_o = LeakyReLU(alpha=0.2)(R3_o)
     
+    R3_o = Add()([R3_i, R3_o])
+    
+    for i in range(3):
+        R3_o = g_block(R3_o, noise, 4*filters)
+    
+    R2_o = Conv2DTranspose(filters = 2*filters, kernel_size=3, strides=2, padding='same', kernel_initializer=init)(R3_o)
+    R2_o = LeakyReLU(alpha=0.2)(R2_o)
+    
+    R2_o = Add()([R2_i, R2_o])
+    
+    for i in range(3):
+        R2_o = g_block(R2_o, noise, 2*filters)
+    
+    R1_o = Conv2DTranspose(filters = filters, kernel_size=3, strides=2, padding='same', kernel_initializer=init)(R2_o)
+    R1_o = LeakyReLU(alpha=0.2)(R1_o)
+    
+    R1_o = Add()([R1_i, R1_o])
+    
+    for i in range(3):
+        R1_o = g_block(R1_o, noise, 2*filters)
+    
+    
+    out_image = Conv2D(filters = 3, kernel_size=7, padding='same', kernel_initializer = init)(R1_o) 
+    out_image = Activation('tanh')(out_image)
+    out_image = Lambda(lambda x: 0.5*x + 0.5, output_shape=lambda x:x)(out_image) 
+    
+    return out_image
     
 #--------------------------------------------------------------------------------------------------------------------   
 
@@ -195,6 +183,39 @@ def LatentEncoder(concat_A_B, nef, z_dim):
 #----------------------------------------------------------------------------------
 """Discriminator Modules for domains A and B"""
 
+def styleGAN_disc(img, cha=16):
+    def d_block(inp, fil, p = True):
+        init = RandomNormal(stddev=0.02)
+        res = SpectralNormalization(Conv2D(fil, 1, kernel_initializer = init), dynamic=True)(inp)
+    
+        out = SpectralNormalization(Conv2D(filters = fil, kernel_size = 3, padding = 'same', kernel_initializer = init), dynamic=True)(inp)
+        out = LeakyReLU(0.2)(out)
+        out = SpectralNormalization(Conv2D(filters = fil, kernel_size = 3, padding = 'same', kernel_initializer = init), dynamic=True)(out)
+        out = LeakyReLU(0.2)(out)
+    
+        out = add([res, out])
+    
+        if p:
+            out = AveragePooling2D()(out)
+    
+        return out
+    
+    init = RandomNormal(stddev=0.02)
+    
+    x = d_block(img, 1 * cha) #100
+    #x = d_block(x, 1 * cha, False) #100
+    x = d_block(x, 2 * cha) #50
+    #x = d_block(x, 2 * cha, False) #50
+    x = d_block(x, 4 * cha) #25
+    #x = d_block(x, 4 * cha, False) #25
+    x = d_block(x, 8 * cha) #13
+    #x = d_block(x, 8 * cha, False) #13
+    x = d_block(x, 16 * cha) #7
+    x = d_block(x, 16 * cha) #7
+    
+    out = Conv2D(filters=1, kernel_size=4, strides=1, padding='same', kernel_initializer = init)(x)
+    return out
+    
 def img_domain_critic(img, ndf=64):
     init = RandomNormal(stddev=0.02)
     
@@ -279,7 +300,6 @@ def blur(img_shape):
     model = Model(inputs = image, outputs = image_processed, name='blur')
     model.compile(loss='mse',  optimizer=Adam(lr=0.0002, beta_1=0.5))
     return model
-    
     
     
 
