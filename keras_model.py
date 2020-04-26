@@ -233,15 +233,15 @@ class AugCycleGAN(object):
                 
     
     def step_cycle_A(self, a, b, z_a, z_b):
-        z_b2 = z_b + 0.07*tf.random.normal((a.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
+        #z_b2 = z_b + 0.07*tf.random.normal((a.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
         
         with tf.GradientTape(persistent=True) as tape:
             #1st map
             b_hat = self.G_AB([a, z_b], training=True)
             fake_b = self.D_B(b_hat, training=True)
             
-            b_hat2 = self.G_AB([a, z_b2], training=True)
-            fake_b2 = self.D_B(b_hat2, training=True)
+            #b_hat2 = self.G_AB([a, z_b2], training=True)
+            #fake_b2 = self.D_B(b_hat2, training=True)
             
             #b_hat_blur=self.blurring(b_hat, training=False)
             #a_blur = self.blurring(a, training=False)
@@ -254,7 +254,7 @@ class AugCycleGAN(object):
             z_b_cyc = self.E_B([a, b_hat], training=True)
         
             #---------------COMPUTE LOSSES-----------------------
-            D_B_loss = discriminator_loss(self.D_B(b, training=True), fake_b) + 10*L1_loss(fake_b, fake_b2)
+            D_B_loss = discriminator_loss(self.D_B(b, training=True), fake_b)
             self.train_info['losses']['unsup']['D_B'].append(D_B_loss)
             
             D_Za_loss = discriminator_loss(self.D_Za(z_a, training=True), fake_z_a)
@@ -274,9 +274,9 @@ class AugCycleGAN(object):
             
             #blur_ab = L1_loss(a_blur, b_hat_blur)
             #self.train_info['losses']['unsup']['blur_ab'].append(blur_ab)
-            lcr_gen = -0.2*L1_loss(b_hat, b_hat2)
+            #lcr_gen = -0.2*L1_loss(b_hat, b_hat2)
             
-            cycle_A_Zb_loss = adv_gen_B + adv_gen_Za + rec_a_dist + rec_Zb + lcr_gen
+            cycle_A_Zb_loss = adv_gen_B + adv_gen_Za + rec_a_dist + rec_Zb
 
         D_B_grads = tape.gradient(D_B_loss, self.D_B.trainable_variables)
         self.D_B_opt.apply_gradients(zip(D_B_grads, self.D_B.trainable_variables))
@@ -300,15 +300,15 @@ class AugCycleGAN(object):
         return D_B_loss, D_Za_loss, cycle_A_Zb_loss
     
     def step_cycle_B(self, a, b, z_a, z_b):
-        z_a2 = z_a + 0.07*tf.random.normal((b.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
+        #z_a2 = z_a + 0.07*tf.random.normal((b.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
         
         with tf.GradientTape(persistent=True) as tape:
             #1st map
             a_hat = self.G_BA([b, z_a], training=True)
             fake_a = self.D_A(a_hat, training=True)
             
-            a_hat2 = self.G_BA([b, z_a2], training=True)
-            fake_a2 = self.D_A(a_hat2, training=True)
+            #a_hat2 = self.G_BA([b, z_a2], training=True)
+            #fake_a2 = self.D_A(a_hat2, training=True)
             
             #a_hat_blur=self.blurring(a_hat, training=False)
             #b_blur = self.blurring(b, training=False)
@@ -321,7 +321,7 @@ class AugCycleGAN(object):
             z_a_cyc = self.E_A([a_hat, b], training=True)
             
             #----------COMPUTE LOSSES-----------
-            D_A_loss = discriminator_loss(self.D_A(a, training=True), fake_a)+10*L1_loss(fake_a, fake_a2)
+            D_A_loss = discriminator_loss(self.D_A(a, training=True), fake_a)
             self.train_info['losses']['unsup']['D_A'].append(D_A_loss)
             
             D_Zb_loss = discriminator_loss(self.D_Zb(z_b, training=True), fake_z_b)
@@ -341,9 +341,9 @@ class AugCycleGAN(object):
             
             #blur_ba = L1_loss(b_blur,a_hat_blur)
             #self.train_info['losses']['unsup']['blur_ba'].append(blur_ba)
-            lcr_gen = -0.2*L1_loss(a_hat, a_hat2)
+            #lcr_gen = -0.2*L1_loss(a_hat, a_hat2)
             
-            cycle_B_Za_loss = adv_gen_A + adv_gen_Zb + rec_b_dist + rec_Za + lcr_gen
+            cycle_B_Za_loss = adv_gen_A + adv_gen_Zb + rec_b_dist + rec_Za
 
         D_A_grads = tape.gradient(D_A_loss, self.D_A.trainable_variables)
         self.D_A_opt.apply_gradients(zip(D_A_grads, self.D_A.trainable_variables))
@@ -490,16 +490,20 @@ class AugCycleGAN(object):
                     
                     sup_a, sup_b = self.supervised_step(sup_img_A, sup_img_B)
                     
+                    
                         
                     if batch % 10 == 0 and not(batch==0 and epoch==0):
-                        #self.mode_seeking_regularisation(img_A, img_B)
                         self.EMA() #update the inference model with exponential moving average
-                        
+                    
+                    """
+                    if batch % 40 == 1:
+                        self.ppl_regularisation(img_A, img_B)
+                    """
+                    
                     #generate the noise vectors from the N(0,sigma^2) distribution
                     if batch % 100 == 0 and not(batch==0 and epoch==0):
-                        
                         elapsed_time = chop_microseconds(datetime.datetime.now() - start_time)
-                        print('[%d/%d][%d/%d]-[%s:%.3f %s:%.3f %s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f]-[%s:%.6f %s:%.6f %s:%.4f %s:%.4f]-[time:%s]'
+                        print('[%d/%d][%d/%d]-[%s:%.3f %s:%.3f %s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f %s:%.3f %s:%.3f]-[time:%s]'
                               % (epoch, epochs, batch, self.data_loader.n_batches,
                                  'D_A', D_A_loss, 'D_B', D_B_loss, 'D_Za', D_Za_loss, 'D_Zb', D_Zb_loss,
                                  'cyc_A_Zb', cycle_A_Zb_loss, 'cyc_B_Za', cycle_B_Za_loss,
@@ -510,14 +514,14 @@ class AugCycleGAN(object):
                                  'ms_BA',0,
                                  elapsed_time))
     
-                    if batch % 500 == 0 and not(batch==0 and epoch==0):
+                    if batch % 400 == 0 and not(batch==0 and epoch==0):
                         training_point = np.around(epoch+batch/self.data_loader.n_batches, 4)
                         self.train_info['performance']['eval_points'].append(training_point)
                         dynamic_evaluator.model = self.G_AB_EMA
                         #Perception and distortion evaluation
                         
                         time_start=time.time()
-                        info = dynamic_evaluator.test(batch_size=125, num_out_imgs=20, training_point=training_point, test_type='mixed')
+                        info = dynamic_evaluator.test(batch_size=100, num_out_imgs=10, training_point=training_point, test_type='mixed')
                         mixed_duration = time.time()-time_start
                         print('Mixed Evaluation took %.3f seconds' % mixed_duration)
                         
