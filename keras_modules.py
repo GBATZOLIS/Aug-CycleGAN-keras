@@ -88,6 +88,9 @@ def CINResnetGenerator(image, noise, filters, nlatent):
     noise = Reshape((nlatent,))(noise)
     image = Lambda(lambda x: 2*x - 1, output_shape=lambda x:x)(image)
     
+
+    R1_modconv = g_block(image, noise, filters)
+    
     R1 = Conv2D(filters = filters, kernel_size=3, padding='same', kernel_initializer = init)(image)
     R1_i = LeakyReLU(alpha=0.2)(R1)
     
@@ -101,7 +104,7 @@ def CINResnetGenerator(image, noise, filters, nlatent):
     R4_i = LeakyReLU(alpha=0.2)(R4)
     
     R4_o=R4_i
-    for i in range(3):
+    for i in range(2):
         R4_o = g_block(R4_o, noise, 8*filters)
     
     R3_o = Conv2DTranspose(filters = 4*filters, kernel_size=3, strides=2, padding='valid', kernel_initializer=init)(R4_o)
@@ -109,7 +112,7 @@ def CINResnetGenerator(image, noise, filters, nlatent):
     
     R3_o = Add()([R3_i, R3_o])
     
-    for i in range(3):
+    for i in range(2):
         R3_o = g_block(R3_o, noise, 4*filters)
     
     R2_o = Conv2DTranspose(filters = 2*filters, kernel_size=3, strides=2, padding='same', kernel_initializer=init)(R3_o)
@@ -117,15 +120,15 @@ def CINResnetGenerator(image, noise, filters, nlatent):
     
     R2_o = Add()([R2_i, R2_o])
     
-    for i in range(3):
+    for i in range(2):
         R2_o = g_block(R2_o, noise, 2*filters)
     
     R1_o = Conv2DTranspose(filters = filters, kernel_size=3, strides=2, padding='same', kernel_initializer=init)(R2_o)
     R1_o = LeakyReLU(alpha=0.2)(R1_o)
     
-    R1_o = Add()([R1_i, R1_o])
+    R1_o = Add()([R1_modconv, R1_o])
     
-    for i in range(3):
+    for i in range(2):
         R1_o = g_block(R1_o, noise, 2*filters)
     
     
