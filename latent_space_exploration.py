@@ -289,7 +289,7 @@ class latent_explorer(object):
         self.img_shape = img_shape
         self.latent_size = latent_size
         self.model = G_AB(img_shape, (1,1,latent_size))
-        self.model.load_weights('models/G_AB_4_500.h5')
+        self.model.load_weights('models/G_AB_6_2000.h5')
         
         #instantiate the LPIPS loss object
         self.lpips = lpips(self.img_shape)
@@ -420,7 +420,7 @@ def get_random_patch(img, patch_dimension):
         return img[x_index:x_index+patch_dimension[0], y_index:y_index+patch_dimension[1], :]
     
 
-latent_exp = latent_explorer((500,500,3), 4)
+latent_exp = latent_explorer((100,100,3), 4)
 
 
 
@@ -433,21 +433,21 @@ names=[296,331,364,378,379,397,484,554,597,595,600,783,790,
 
 
 #names=[100, 201, 307, 445, 1927, 3033, 3017, 3177, 3424, 3425]
-names=np.arange(25)
+#names=np.arange(25)
 
 
 for counter, name in tqdm(enumerate(names)):
     print(name)
-    x_true = plt.imread('data/full_size_test_images/%s.jpg'% str(name)).astype(np.float)
+    x_true = plt.imread('data/testA/%s.jpg'% str(name)).astype(np.float)
     x_true = x_true/255
-    x_true = get_random_patch(x_true, (500,500))
+    #x_true = get_random_patch(x_true, (500,500))
     x = np.expand_dims(x_true, axis=0)
         
-    #y_true = plt.imread('data/testB/%s.jpg'% str(name)).astype(np.float)
-    #y_true = y_true/255
+    y_true = plt.imread('data/testB/%s.jpg'% str(name)).astype(np.float)
+    y_true = y_true/255
     
     #opt_loc, opt_value=latent_exp.mode_search(x,y_true, metric='lpips')
-    latent_exp.create_gif(counter, x, start=0, gif_type='normal')
+    latent_exp.create_gif(counter, x, y_true, start=0, gif_type='normal')
 
 
 
