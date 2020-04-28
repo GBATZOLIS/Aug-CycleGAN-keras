@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Apr  2 17:08:21 2020
-
-@author: Georgios
-"""
-
 #Create the simplest version of the LPIPS loss
 #use cosine distance instead of learnable weights based on the LPIPS dataset
 
@@ -19,6 +12,7 @@ class lpips(object):
     def __init__(self, img_shape):
         self.img_shape = img_shape
         self.model = self.create_model()
+        self.normalised_reference=[]
         
     def create_model(self,):
         base_model = tf.keras.applications.VGG19(input_shape=self.img_shape, 
@@ -43,26 +37,34 @@ class lpips(object):
         
         return model
     
-    def set_reference(self, x):
+    def clear_reference(self,):
+        self.normalised_reference=[]
+        
+    def set_reference(self, x, clear=True):
         x = x*255
         x = preprocess_input(x)
         out_tensors = self.model(x)
-        self.reference = out_tensors
+        #self.reference = out_tensors
+        
         normalised_reference = []
         for tensor_ref in out_tensors:
             tensor_ref,_ = tf.linalg.normalize(tensor_ref, axis=-1)
             normalised_reference.append(tensor_ref)
-        self.normalised_reference = normalised_reference
         
-    def distance(self, tensor1, reference=None):
-        if reference==None:
+        if clear==True:
+            self.normalised_reference=[normalised_reference]
+        else:
+            self.normalised_reference.append(normalised_reference)
+        
+    def distance(self, tensor1, reference=0):
+        if type(reference)==int:
             tensor1 = tensor1*255
             tensor1 = preprocess_input(tensor1)
             
             tensor1_outs = self.model(tensor1)
             
             distance=0
-            for tensor1, tensor2 in zip(tensor1_outs, self.normalised_reference):
+            for tensor1, tensor2 in zip(tensor1_outs, self.normalised_reference[reference]):
                 H=tensor1.shape[1]
                 W=tensor1.shape[2]
                 tensor1,_ = tf.linalg.normalize(tensor1, axis=-1)
@@ -105,14 +107,3 @@ class lpips(object):
                 
                 total_distance=total_distance/batch_size
                 return total_distance
-
-
-"""
-
-metric=lpips((100,100,3))
-
-x1 = tf.random.normal((5,100,100,3), dtype=tf.float32)
-x2 = tf.random.normal((5,100,100,3), dtype=tf.float32)
-
-print(metric.distance(x1,x2))
-"""
