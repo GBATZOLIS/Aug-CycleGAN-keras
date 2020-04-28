@@ -88,6 +88,6 @@ def N_map(latent_shape, domain):
     model = Model(inputs=n, outputs=w, name='NoiseMap_'+domain)
     return model
 
-model=E_A((100,100,3), (1,1,4))
+#model=E_A((100,100,3), (1,1,4))
 
-print(model.summary())
+#print(model.summary())

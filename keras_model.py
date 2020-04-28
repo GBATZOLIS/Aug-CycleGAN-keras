@@ -477,7 +477,6 @@ class AugCycleGAN(object):
                     
                     sup_a, sup_b = self.supervised_step(sup_img_A, sup_img_B)
                     
-                    print(1)
                         
                     if batch % 10 == 0 and not(batch==0 and epoch==0):
                         self.EMA() #update the inference model with exponential moving average
@@ -656,4 +655,4 @@ class AugCycleGAN(object):
             
             
 model = AugCycleGAN((100,100,3), (1,1,4), resume=False)
-model.train(epochs=100, batch_size = 1)
+model.train(epochs=100, batch_size = 20)
