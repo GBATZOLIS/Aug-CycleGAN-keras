@@ -1,17 +1,5 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Fri Feb 28 17:04:32 2020
-
-@author: Georgios
-"""
-
-#augmented cycleGAN from scratch in KERAS
-
-
-#Implementation of the MCinCGAN paper
-
-#laod required modules
 import datetime
+import time
 import numpy as np
 import os
 import pickle
@@ -26,7 +14,7 @@ from data_loader import DataLoader
 
 #keras
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.models import Model
+from tensorflow.keras.models import Model, clone_model
 from tensorflow.keras.layers import Input
 from tensorflow.keras.models import load_model
 from keras_modules import blur
@@ -91,6 +79,13 @@ class AugCycleGAN(object):
         self.train_info['losses']['unsup']['blur_ab']=[] #from domain A to domain B
         self.train_info['losses']['unsup']['blur_ba']=[] #from domain B to domain A
         
+        #regularisation losses
+        self.train_info['losses']['reg']={}
+        self.train_info['losses']['reg']['ppl_G_AB']=[]
+        self.train_info['losses']['reg']['ppl_G_BA']=[]
+        self.train_info['losses']['reg']['ms_G_AB']=[]
+        self.train_info['losses']['reg']['ms_G_BA']=[]
+        
         
         #-------------PERFORMANCE EVALUATION----------------------
         self.train_info['performance'] = {}
@@ -101,14 +96,31 @@ class AugCycleGAN(object):
         #on the entire test dataset using 20 output images for each image
         #We want to get as less noisy estimation of the performance of the model as possible
         #The first list holds the sample interval measurements, the second holds the ep measurements
-        self.train_info['performance']['ssim_mean']=[[],[]]
-        self.train_info['performance']['ssim_std']=[[],[]]
-        self.train_info['performance']['lpips_mean']=[[],[]]
-        self.train_info['performance']['lpips_std']=[[],[]]
+      
+        self.train_info['performance']['avg_min_lpips']=[[],[]]
+        self.train_info['performance']['avg_mean_lpips']=[[],[]]
+        self.train_info['performance']['avg_max_lpips']=[[],[]]
+        
+        self.train_info['performance']['avg_min_ssim']=[[],[]]
+        self.train_info['performance']['avg_mean_ssim']=[[],[]]
+        self.train_info['performance']['avg_max_ssim']=[[],[]]
+        
+        self.train_info['performance']['avg_min_div']=[[],[]]
+        self.train_info['performance']['avg_mean_div']=[[],[]]
+        self.train_info['performance']['avg_max_div']=[[],[]]
+        
 
 
         #configure data loader
         self.data_loader = DataLoader(img_res=(self.img_shape[0], self.img_shape[1]))
+        
+        #TRAINING PARAMETERS
+        #perceptual paths length parameters
+        self.pl_mean_G_AB = 0.
+        self.pl_mean_G_BA = 0.
+        
+        #Exponential moving average parameters
+        self.beta=0.99
         
         #instantiate the LPIPS loss object
         self.lpips = lpips(self.img_shape)
@@ -134,65 +146,93 @@ class AugCycleGAN(object):
             self.D_Za.load_weights(glob('models/D_Za/*.h5')[-1])
             self.D_Zb.load_weights(glob('models/D_Zb/*.h5')[-1])
         
+        #create the inference model with exponential moving average of the weights
+        self.G_AB_EMA = clone_model(self.G_AB)
+        self.G_AB_EMA.set_weights(self.G_AB.get_weights())
+        
+        #set the optimizers of all models
         self.G_AB_opt = self.G_BA_opt = Adam(lr=0.0002, beta_1=0.5)
         self.D_A_opt = self.D_B_opt = Adam(lr=0.0002, beta_1=0.5)
         self.E_A_opt = self.E_B_opt = Adam(lr=0.0002, beta_1=0.5)
         self.D_Za_opt = self.D_Zb_opt = Adam(lr=0.0002, beta_1=0.5)
+        
     
+    def EMA(self,):
+        for i in range(len(self.G_AB.layers)):
+            up_weight = self.G_AB.layers[i].get_weights()
+            old_weight = self.G_AB_EMA.layers[i].get_weights()
+            new_weight = []
+            for j in range(len(up_weight)):
+                new_weight.append(old_weight[j] * self.beta + (1-self.beta) * up_weight[j])
+            self.G_AB_EMA.layers[i].set_weights(new_weight)
+
+    def EMA_init(self,):
+        self.G_AB_EMA.set_weights(self.G_AB.get_weights())
+
+        
     def supervised_step(self, a, b):     
         with tf.GradientTape(persistent=True) as tape:
             z_a_hat = self.E_A([a,b], training=True)
+            fake_z_a = self.D_Za(z_a_hat, training=False) #used for the regularisation og the E_A encoder
             a_hat = self.G_BA([b,z_a_hat], training=True)
-            #sup_loss_a = 0.5*L1_loss(a,a_hat)-0.5*tf.reduce_mean(tf.image.ssim(a,a_hat, max_val=1))
-            
-            sup_perc_a = self.lpips.distance(a,a_hat)
-            self.train_info['losses']['sup']['perc_a'].append(sup_perc_a)
+
+            #sup_perc_a = self.lpips.distance(a,a_hat)
+            #self.train_info['losses']['sup']['perc_a'].append(sup_perc_a)
             
             sup_dist_a = L1_loss(a,a_hat)
             self.train_info['losses']['sup']['dist_a'].append(sup_dist_a)
             
-            sup_loss_a = sup_dist_a+sup_perc_a
+            sup_loss_a = sup_dist_a
+            adv_gen_Za = gen_loss(fake_z_a)
+            E_A_loss = sup_loss_a + 0.5*adv_gen_Za
             
+            #---------------------------------------------------------------
             z_b_hat = self.E_B([a,b], training=True)
+            fake_z_b = self.D_Zb(z_b_hat, training=False)
             b_hat = self.G_AB([a, z_b_hat], training=True)
-            #sup_loss_b = 0.5*L1_loss(b,b_hat)-0.5*tf.reduce_mean(tf.image.ssim(a,a_hat, max_val=1))
-            sup_perc_b = self.lpips.distance(b,b_hat)
-            self.train_info['losses']['sup']['perc_b'].append(sup_perc_b)
+            
+            
+            #sup_perc_b = self.lpips.distance(b,b_hat)
+            #self.train_info['losses']['sup']['perc_b'].append(sup_perc_b)
             
             sup_dist_b = L1_loss(b,b_hat)
             self.train_info['losses']['sup']['dist_b'].append(sup_dist_b)
             
-            sup_loss_b = sup_dist_b+sup_perc_b
-   
+            sup_loss_b = sup_dist_b
+            adv_gen_Zb = gen_loss(fake_z_b)
+            E_B_loss = sup_loss_b + 0.5*adv_gen_Zb
         
         #supervised loss a
         G_BA_grads = tape.gradient(sup_loss_a, self.G_BA.trainable_variables)
         self.G_BA_opt.apply_gradients(zip(G_BA_grads, self.G_BA.trainable_variables))
         
-        E_A_grads = tape.gradient(sup_loss_a, self.E_A.trainable_variables)
+        E_A_grads = tape.gradient(E_A_loss, self.E_A.trainable_variables)
         self.E_A_opt.apply_gradients(zip(E_A_grads, self.E_A.trainable_variables))
         
         #supervised loss b
         G_AB_grads = tape.gradient(sup_loss_b, self.G_AB.trainable_variables)
         self.G_AB_opt.apply_gradients(zip(G_AB_grads, self.G_AB.trainable_variables))
         
-        E_B_grads = tape.gradient(sup_loss_b, self.E_B.trainable_variables)
+        E_B_grads = tape.gradient(E_B_loss, self.E_B.trainable_variables)
         self.E_B_opt.apply_gradients(zip(E_B_grads, self.E_B.trainable_variables))
         
         return sup_loss_a, sup_loss_b
                 
     
     def step_cycle_A(self, a, b, z_a, z_b):
+        #z_b2 = z_b + 0.07*tf.random.normal((a.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
         
         with tf.GradientTape(persistent=True) as tape:
             #1st map
             b_hat = self.G_AB([a, z_b], training=True)
-            b_hat_blur=self.blurring(b_hat, training=False)
-            a_blur = self.blurring(a, training=False)
+            fake_b = self.D_B(b_hat, training=True)
             
-            b_hat_hf = tf.math.subtract(b_hat, b_hat_blur)
-            fake_b = self.D_B(b_hat_hf, training=True)
-
+            #b_hat2 = self.G_AB([a, z_b2], training=True)
+            #fake_b2 = self.D_B(b_hat2, training=True)
+            
+            #b_hat_blur=self.blurring(b_hat, training=False)
+            #a_blur = self.blurring(a, training=False)
+             
             z_a_hat = self.E_A([a, b_hat], training=True)
             fake_z_a = self.D_Za(z_a_hat, training=True)
     
@@ -201,7 +241,7 @@ class AugCycleGAN(object):
             z_b_cyc = self.E_B([a, b_hat], training=True)
         
             #---------------COMPUTE LOSSES-----------------------
-            D_B_loss = discriminator_loss(self.D_B(tf.math.subtract(b, self.blurring(b, training=False)), training=True), fake_b)
+            D_B_loss = discriminator_loss(self.D_B(b, training=True), fake_b)
             self.train_info['losses']['unsup']['D_B'].append(D_B_loss)
             
             D_Za_loss = discriminator_loss(self.D_Za(z_a, training=True), fake_z_a)
@@ -219,12 +259,11 @@ class AugCycleGAN(object):
             rec_Zb = L1_loss(z_b_cyc,z_b)
             self.train_info['losses']['unsup']['rec_Zb'].append(rec_Zb)
             
-            blur_ab = L1_loss(a_blur, b_hat_blur)
-            self.train_info['losses']['unsup']['blur_ab'].append(blur_ab)
+            #blur_ab = L1_loss(a_blur, b_hat_blur)
+            #self.train_info['losses']['unsup']['blur_ab'].append(blur_ab)
+            #lcr_gen = -0.2*L1_loss(b_hat, b_hat2)
             
-            lpips_ab = self.lpips.distance(a,b_hat) #make sure the high and low frequencies fit together
-            
-            cycle_A_Zb_loss = adv_gen_B + adv_gen_Za + rec_a_dist + rec_Zb + blur_ab + lpips_ab
+            cycle_A_Zb_loss = adv_gen_B + adv_gen_Za + rec_a_dist + rec_Zb
 
         D_B_grads = tape.gradient(D_B_loss, self.D_B.trainable_variables)
         self.D_B_opt.apply_gradients(zip(D_B_grads, self.D_B.trainable_variables))
@@ -248,16 +287,18 @@ class AugCycleGAN(object):
         return D_B_loss, D_Za_loss, cycle_A_Zb_loss
     
     def step_cycle_B(self, a, b, z_a, z_b):
-        
+        #z_a2 = z_a + 0.07*tf.random.normal((b.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
         
         with tf.GradientTape(persistent=True) as tape:
             #1st map
             a_hat = self.G_BA([b, z_a], training=True)
-            a_hat_blur=self.blurring(a_hat, training=False)
-            b_blur = self.blurring(b, training=False)
+            fake_a = self.D_A(a_hat, training=True)
             
-            a_hat_hf = tf.math.subtract(a_hat, a_hat_blur)
-            fake_a = self.D_A(a_hat_hf, training=True)
+            #a_hat2 = self.G_BA([b, z_a2], training=True)
+            #fake_a2 = self.D_A(a_hat2, training=True)
+            
+            #a_hat_blur=self.blurring(a_hat, training=False)
+            #b_blur = self.blurring(b, training=False)
 
             z_b_hat = self.E_B([a_hat, b], training=True)
             fake_z_b = self.D_Zb(z_b_hat, training=True)
@@ -267,7 +308,7 @@ class AugCycleGAN(object):
             z_a_cyc = self.E_A([a_hat, b], training=True)
             
             #----------COMPUTE LOSSES-----------
-            D_A_loss = discriminator_loss(self.D_A(tf.math.subtract(a, self.blurring(a, training=False)), training=True), fake_a)
+            D_A_loss = discriminator_loss(self.D_A(a, training=True), fake_a)
             self.train_info['losses']['unsup']['D_A'].append(D_A_loss)
             
             D_Zb_loss = discriminator_loss(self.D_Zb(z_b, training=True), fake_z_b)
@@ -285,12 +326,11 @@ class AugCycleGAN(object):
             rec_Za = L1_loss(z_a_cyc,z_a)
             self.train_info['losses']['unsup']['rec_Za'].append(rec_Za)
             
-            blur_ba = L1_loss(b_blur,a_hat_blur)
-            self.train_info['losses']['unsup']['blur_ba'].append(blur_ba)
+            #blur_ba = L1_loss(b_blur,a_hat_blur)
+            #self.train_info['losses']['unsup']['blur_ba'].append(blur_ba)
+            #lcr_gen = -0.2*L1_loss(a_hat, a_hat2)
             
-            lpips_ba = self.lpips.distance(b,a_hat) #make sure the high and low frequencies fit together
-            
-            cycle_B_Za_loss = adv_gen_A + adv_gen_Zb + rec_b_dist + rec_Za + blur_ba + lpips_ba
+            cycle_B_Za_loss = adv_gen_A + adv_gen_Zb + rec_b_dist + rec_Za
 
         D_A_grads = tape.gradient(D_A_loss, self.D_A.trainable_variables)
         self.D_A_opt.apply_gradients(zip(D_A_grads, self.D_A.trainable_variables))
@@ -313,6 +353,88 @@ class AugCycleGAN(object):
         
         return D_A_loss, D_Zb_loss, cycle_B_Za_loss
     
+    def mode_seeking_regularisation(self, a, b):
+        with tf.GradientTape(persistent=True) as tape:
+            z_b = tf.random.normal((a.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
+            b_hat = self.G_AB([a,z_b], training=True)
+                
+            z_b_dash = tf.random.normal((a.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
+            b_hat_dash = self.G_AB([a,z_b_dash], training=True)
+            
+            mode_seeking_rt_AB = L1_loss(b_hat, b_hat_dash)/(L1_loss(z_b, z_b_dash)+1e-8)
+            mode_seeking_loss_AB = -1*mode_seeking_rt_AB
+            self.train_info['losses']['reg']['ms_G_AB'].append(mode_seeking_loss_AB)
+            
+            #-----------------------------------------------
+            z_a = tf.random.normal((b.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
+            a_hat = self.G_BA([b,z_a], training=True)
+                
+            z_a_dash = tf.random.normal((b.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
+            a_hat_dash = self.G_BA([b,z_a_dash], training=True)
+            
+            mode_seeking_rt_BA = L1_loss(a_hat, a_hat_dash)/(L1_loss(z_a, z_a_dash)+1e-8)
+            mode_seeking_loss_BA = -1*mode_seeking_rt_BA
+            self.train_info['losses']['reg']['ms_G_BA'].append(mode_seeking_loss_BA)
+            
+        #update the generator models G_AB and G_BA
+        G_AB_grads = tape.gradient(mode_seeking_loss_AB, self.G_AB.trainable_variables)
+        self.G_AB_opt.apply_gradients(zip(G_AB_grads, self.G_AB.trainable_variables))
+        
+        G_BA_grads = tape.gradient(mode_seeking_loss_BA, self.G_BA.trainable_variables)
+        self.G_BA_opt.apply_gradients(zip(G_BA_grads, self.G_BA.trainable_variables))
+            
+        
+    def ppl_regularisation(self, a, b):
+        #every M steps we regularise the perceptual path length
+        #we have 2 generators (G_AB, G_BA)
+        
+        with tf.GradientTape(persistent=True) as tape:
+            z_b = tf.random.normal((a.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
+            b_hat = self.G_AB([a,z_b], training=True)
+            
+            z_b_dash = z_b + 0.3*tf.random.normal((a.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
+            b_hat_dash = self.G_AB([a,z_b_dash], training=True)
+            
+            delta_G_AB = tf.math.sqrt(tf.math.reduce_sum(tf.math.square(b_hat-b_hat_dash), axis=[1,2,3]))
+            pl_lengths_G_AB = delta_G_AB
+            
+            ppl_loss_G_AB = tf.math.reduce_mean(tf.math.square(pl_lengths_G_AB - self.pl_mean_G_AB))
+            self.train_info['losses']['reg']['ppl_G_AB'].append(ppl_loss_G_AB)
+            
+            
+            #---------------------------------------------------------------------------------------
+            z_a = tf.random.normal((b.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
+            a_hat = self.G_BA([b,z_a], training=True)
+            
+            z_a_dash = z_a + 0.3*tf.random.normal((b.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
+            a_hat_dash = self.G_BA([b,z_a_dash], training=True)
+            
+            delta_G_BA = tf.math.sqrt(tf.math.reduce_sum(tf.math.square(a_hat-a_hat_dash), axis=[1,2,3]))
+            pl_lengths_G_BA = delta_G_BA
+            
+            ppl_loss_G_BA = tf.math.reduce_mean(tf.math.square(pl_lengths_G_BA - self.pl_mean_G_BA))
+            self.train_info['losses']['reg']['ppl_G_BA'].append(ppl_loss_G_BA)
+            
+        
+        #update the generator models
+        ppl_G_AB_grads = tape.gradient(ppl_loss_G_AB, self.G_AB.trainable_variables)
+        self.G_AB_opt.apply_gradients(zip(ppl_G_AB_grads, self.G_AB.trainable_variables))
+        
+        ppl_G_BA_grads = tape.gradient(ppl_loss_G_BA, self.G_BA.trainable_variables)
+        self.G_BA_opt.apply_gradients(zip(ppl_G_BA_grads, self.G_BA.trainable_variables))
+            
+        
+        if self.pl_mean_G_AB==0.:
+            self.pl_mean_G_AB = tf.math.reduce_mean(pl_lengths_G_AB)
+        else:
+            self.pl_mean_G_AB = 0.999*self.pl_mean_G_AB + 0.001*tf.math.reduce_mean(pl_lengths_G_AB)
+            
+        if self.pl_mean_G_BA==0.:
+            self.pl_mean_G_BA = tf.math.reduce_mean(pl_lengths_G_BA)
+        else:
+            self.pl_mean_G_BA = 0.999*self.pl_mean_G_BA + 0.001*tf.math.reduce_mean(pl_lengths_G_BA)
+        
+
     def save_models(self,epoch):
         
         #save the models to intoduce resume capacity to training
@@ -345,90 +467,147 @@ class AugCycleGAN(object):
                     sup_img_A = tf.convert_to_tensor(sup_img_A, dtype=tf.float32)
                     sup_img_B = tf.convert_to_tensor(sup_img_B, dtype=tf.float32)
         
-                    #generate the noise vectors from the N(0,sigma^2) distribution
                     
-                    for i in range(2):
-                        z_a = tf.random.normal((batch_size, 1, 1, self.latent_shape[-1]), dtype=tf.float32)
-                        z_b = tf.random.normal((batch_size, 1, 1, self.latent_shape[-1]), dtype=tf.float32)
                         
-                        D_B_loss, D_Za_loss, cycle_A_Zb_loss = self.step_cycle_A(img_A, img_B, z_a, z_b)
-                        D_A_loss, D_Zb_loss, cycle_B_Za_loss = self.step_cycle_B(img_A, img_B, z_a, z_b)
+                    z_a = tf.random.normal((batch_size, self.latent_shape[-1]), dtype=tf.float32)
+                    z_b = tf.random.normal((batch_size, self.latent_shape[-1]), dtype=tf.float32)
+                    
+                    D_B_loss, D_Za_loss, cycle_A_Zb_loss = self.step_cycle_A(img_A, img_B, z_a, z_b)
+                    D_A_loss, D_Zb_loss, cycle_B_Za_loss = self.step_cycle_B(img_A, img_B, z_a, z_b)
                     
                     sup_a, sup_b = self.supervised_step(sup_img_A, sup_img_B)
                     
-                    elapsed_time = chop_microseconds(datetime.datetime.now() - start_time)
-                    print('[%d/%d][%d/%d]-[%s:%.3f %s:%.3f %s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f]-[time:%s]'
-                          % (epoch, epochs, batch, self.data_loader.n_batches,
-                             'D_A', D_A_loss, 'D_B', D_B_loss, 'D_Za', D_Za_loss, 'D_Zb', D_Zb_loss,
-                             'cyc_A_Zb', cycle_A_Zb_loss, 'cyc_B_Za', cycle_B_Za_loss,
-                             'sup_a', sup_a, 'sup_b', sup_b, elapsed_time))
+                    print(1)
+                        
+                    if batch % 10 == 0 and not(batch==0 and epoch==0):
+                        self.EMA() #update the inference model with exponential moving average
+                    
+                    """
+                    if batch % 40 == 1:
+                        self.ppl_regularisation(img_A, img_B)
+                    """
+                    
+                    #generate the noise vectors from the N(0,sigma^2) distribution
+                    if batch % 100 == 0 and not(batch==0 and epoch==0):
+                        elapsed_time = chop_microseconds(datetime.datetime.now() - start_time)
+                        print('[%d/%d][%d/%d]-[%s:%.3f %s:%.3f %s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f %s:%.3f %s:%.3f]-[time:%s]'
+                              % (epoch, epochs, batch, self.data_loader.n_batches,
+                                 'D_A', D_A_loss, 'D_B', D_B_loss, 'D_Za', D_Za_loss, 'D_Zb', D_Zb_loss,
+                                 'cyc_A_Zb', cycle_A_Zb_loss, 'cyc_B_Za', cycle_B_Za_loss,
+                                 'sup_a', sup_a, 'sup_b', sup_b, 
+                                 'ppl_AB', 0,
+                                 'ppl_BA', 0,
+                                 'ms_AB',0,
+                                 'ms_BA',0,
+                                 elapsed_time))
     
-                    if batch % 50 == 0 and not(batch==0 and epoch==0):
+                    if batch % 400 == 0 and not(batch==0 and epoch==0):
                         training_point = np.around(epoch+batch/self.data_loader.n_batches, 4)
                         self.train_info['performance']['eval_points'].append(training_point)
-                        dynamic_evaluator.model = self.G_AB
+                        dynamic_evaluator.model = self.G_AB_EMA
                         #Perception and distortion evaluation
+                        
+                        time_start=time.time()
                         info = dynamic_evaluator.test(batch_size=100, num_out_imgs=10, training_point=training_point, test_type='mixed')
+                        mixed_duration = time.time()-time_start
+                        print('Mixed Evaluation took %.3f seconds' % mixed_duration)
                         
+                        self.train_info['performance']['avg_min_lpips'][0].append(info['avg_min_lpips'])
+                        self.train_info['performance']['avg_mean_lpips'][0].append(info['avg_mean_lpips'])
+                        self.train_info['performance']['avg_max_lpips'][0].append(info['avg_max_lpips'])
                         
-                        self.train_info['performance']['ssim_mean'][0].append(info['ssim_mean'])
-                        self.train_info['performance']['ssim_std'][0].append(info['ssim_std'])
-                        self.train_info['performance']['lpips_mean'][0].append(info['lpips_mean'])
-                        self.train_info['performance']['lpips_std'][0].append(info['lpips_std'])
+                        self.train_info['performance']['avg_min_ssim'][0].append(info['avg_min_ssim'])
+                        self.train_info['performance']['avg_mean_ssim'][0].append(info['avg_mean_ssim'])
+                        self.train_info['performance']['avg_max_ssim'][0].append(info['avg_max_ssim'])
+                        
+                        self.train_info['performance']['avg_min_div'][0].append(info['avg_min_div'])
+                        self.train_info['performance']['avg_mean_div'][0].append(info['avg_mean_div'])
+                        self.train_info['performance']['avg_max_div'][0].append(info['avg_max_div'])
                         
                         plt.figure(figsize=(21,15))
-                        plt.title('SSIM (100x10)')
-                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['ssim_mean'][0], label='mean')
-                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['ssim_std'][0], label='std')
+                        plt.title('Diversity')
+                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_min_div'][0], label='min')
+                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_mean_div'][0], label='mean')
+                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_max_div'][0], label='max')
+                        plt.legend()
+                        plt.savefig('progress/diversity/diversity.png', bbox_inches='tight')
+                        
+                        plt.figure(figsize=(21,15))
+                        plt.title('SSIM')
+                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_min_ssim'][0], label='min')
+                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_mean_ssim'][0], label='mean')
+                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_max_ssim'][0], label='max')
                         plt.legend()
                         plt.savefig('progress/distortion/SSIM.png', bbox_inches='tight')
                         
                         
                         plt.figure(figsize=(21,15))
-                        plt.title('LPIPS (100x10)')
-                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['lpips_mean'][0], label='mean')
-                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['lpips_std'][0], label='std')
+                        plt.title('LPIPS')
+                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_min_lpips'][0], label='min')
+                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_mean_lpips'][0], label='mean')
+                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_max_lpips'][0], label='max')
                         plt.legend()
                         plt.savefig('progress/perception/LPIPS.png', bbox_inches='tight')
+                        
                         plt.close('all')
                         
-                        
                         #save the generators
-                        self.G_AB.save("models/G_AB_all/G_AB_{}_{}.h5".format(epoch, batch))
-                        #save the tensorboard values
-                        with open('progress/training_information/'+ 'train_info' + '.pkl', 'wb') as f:
-                            pickle.dump(self.train_info, f, pickle.HIGHEST_PROTOCOL)
+                        self.G_AB_EMA.save("models/G_AB_all/G_AB_{}_{}.h5".format(epoch, batch))
+                        
+                    
+                    if batch % 100 ==0 and epoch % 10==0:
+                        self.EMA_init() #restart the G_AB_EMA from the current state of the G_AB
                 
                 
-                
-                dynamic_evaluator.model = self.G_AB #set the current G_AB model for evaluation
+                dynamic_evaluator.model = self.G_AB_EMA #set the current G_AB_EMA model for evaluation
                 #Perception and distortion evaluation on the entire test dataset
-                info = dynamic_evaluator.test(batch_size=4000, num_out_imgs=10, training_point=training_point, test_type='mixed')
+                info = dynamic_evaluator.test(batch_size=250, num_out_imgs=25, training_point=training_point, test_type='mixed')
                 
-                self.train_info['performance']['ssim_mean'][1].append(info['ssim_mean'])
-                self.train_info['performance']['ssim_std'][1].append(info['ssim_std'])
+                self.train_info['performance']['avg_min_lpips'][1].append(info['avg_min_lpips'])
+                self.train_info['performance']['avg_mean_lpips'][1].append(info['avg_mean_lpips'])
+                self.train_info['performance']['avg_max_lpips'][1].append(info['avg_max_lpips'])
                 
-                self.train_info['performance']['lpips_mean'][1].append(info['lpips_mean'])
-                self.train_info['performance']['lpips_std'][1].append(info['lpips_std'])
+                self.train_info['performance']['avg_min_ssim'][1].append(info['avg_min_ssim'])
+                self.train_info['performance']['avg_mean_ssim'][1].append(info['avg_mean_ssim'])
+                self.train_info['performance']['avg_max_ssim'][1].append(info['avg_max_ssim'])
+                
+                self.train_info['performance']['avg_min_div'][1].append(info['avg_min_div'])
+                self.train_info['performance']['avg_mean_div'][1].append(info['avg_mean_div'])
+                self.train_info['performance']['avg_max_div'][1].append(info['avg_max_div'])
                 
                 plt.figure(figsize=(21,15))
-                plt.title('SSIM (test dataset)')
-                plt.plot(self.train_info['performance']['ssim_mean'][1], label='mean')
-                plt.plot(self.train_info['performance']['ssim_std'][1], label='std')
+                plt.title('Diversity')
+                plt.plot(self.train_info['performance']['avg_min_div'][1], label='min')
+                plt.plot(self.train_info['performance']['avg_mean_div'][1], label='mean')
+                plt.plot(self.train_info['performance']['avg_max_div'][1], label='max')
+                plt.legend()
+                plt.savefig('progress/diversity/diversity_epoch.png', bbox_inches='tight')
+                
+                plt.figure(figsize=(21,15))
+                plt.title('SSIM')
+                plt.plot(self.train_info['performance']['avg_min_ssim'][1], label='min')
+                plt.plot(self.train_info['performance']['avg_mean_ssim'][1], label='mean')
+                plt.plot(self.train_info['performance']['avg_max_ssim'][1], label='max')
                 plt.legend()
                 plt.savefig('progress/distortion/SSIM_epoch.png', bbox_inches='tight')
                 
                 
                 plt.figure(figsize=(21,15))
-                plt.title('LPIPS (test dataset)')
-                plt.plot(self.train_info['performance']['lpips_mean'][1], label='mean')
-                plt.plot(self.train_info['performance']['lpips_std'][1], label='std')
+                plt.title('LPIPS')
+                plt.plot(self.train_info['performance']['avg_min_lpips'][1], label='min')
+                plt.plot(self.train_info['performance']['avg_mean_lpips'][1], label='mean')
+                plt.plot(self.train_info['performance']['avg_max_lpips'][1], label='max')
                 plt.legend()
                 plt.savefig('progress/perception/LPIPS_epoch.png', bbox_inches='tight')
-                plt.close('all')
                 
+                plt.close('all')
+                        
                 #save the models to intoduce resume capacity to training
                 self.save_models(epoch)
+                
+                #save the tensorboard values
+                with open('progress/training_information/'+ 'train_info' + '.pkl', 'wb') as f:
+                    pickle.dump(self.train_info, f, pickle.HIGHEST_PROTOCOL)
             
         except KeyboardInterrupt:
             print('Training has been terminated manually')
@@ -454,6 +633,7 @@ class AugCycleGAN(object):
             if clean=='y' or clean=='yes':
                 #delete training data from repo main files
                 G_AB_paths = glob('models/G_AB/*.h5')
+                G_AB_all_paths = glob('models/G_AB_all/*.h5')
                 G_BA_paths = glob('models/G_BA/*.h5')
                 E_A_paths = glob('models/E_A/*.h5')
                 E_B_paths = glob('models/E_B/*.h5')
@@ -463,6 +643,7 @@ class AugCycleGAN(object):
                 D_Zb_paths = glob('models/D_Zb/*.h5')
                 
                 self.delete_models(G_AB_paths)
+                self.delete_models(G_AB_all_paths)
                 self.delete_models(G_BA_paths)
                 self.delete_models(E_A_paths)
                 self.delete_models(E_B_paths)
@@ -476,11 +657,3 @@ class AugCycleGAN(object):
             
 model = AugCycleGAN((100,100,3), (1,1,4), resume=False)
 model.train(epochs=100, batch_size = 1)
-
-
-
-    
-
-        
-
-        

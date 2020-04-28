@@ -85,8 +85,11 @@ def CINResnetGenerator(image, noise, filters, nlatent):
         
     init = RandomNormal(stddev=0.02)
     
-    noise = Reshape((nlatent,))(noise)
+    #noise = Reshape((nlatent,))(noise)
     image = Lambda(lambda x: 2*x - 1, output_shape=lambda x:x)(image)
+    
+
+    #R1_modconv = g_block(image, noise, filters)
     
     R1 = Conv2D(filters = filters, kernel_size=3, padding='same', kernel_initializer = init)(image)
     R1_i = LeakyReLU(alpha=0.2)(R1)
@@ -101,7 +104,7 @@ def CINResnetGenerator(image, noise, filters, nlatent):
     R4_i = LeakyReLU(alpha=0.2)(R4)
     
     R4_o=R4_i
-    for i in range(3):
+    for i in range(2):
         R4_o = g_block(R4_o, noise, 8*filters)
     
     R3_o = Conv2DTranspose(filters = 4*filters, kernel_size=3, strides=2, padding='valid', kernel_initializer=init)(R4_o)
@@ -109,7 +112,7 @@ def CINResnetGenerator(image, noise, filters, nlatent):
     
     R3_o = Add()([R3_i, R3_o])
     
-    for i in range(3):
+    for i in range(2):
         R3_o = g_block(R3_o, noise, 4*filters)
     
     R2_o = Conv2DTranspose(filters = 2*filters, kernel_size=3, strides=2, padding='same', kernel_initializer=init)(R3_o)
@@ -117,7 +120,7 @@ def CINResnetGenerator(image, noise, filters, nlatent):
     
     R2_o = Add()([R2_i, R2_o])
     
-    for i in range(3):
+    for i in range(2):
         R2_o = g_block(R2_o, noise, 2*filters)
     
     R1_o = Conv2DTranspose(filters = filters, kernel_size=3, strides=2, padding='same', kernel_initializer=init)(R2_o)
@@ -125,7 +128,7 @@ def CINResnetGenerator(image, noise, filters, nlatent):
     
     R1_o = Add()([R1_i, R1_o])
     
-    for i in range(3):
+    for i in range(2):
         R1_o = g_block(R1_o, noise, 2*filters)
     
     
@@ -180,6 +183,48 @@ def LatentEncoder(concat_A_B, nef, z_dim):
     
     return encoding
 
+def Alternative_Encoder(a, b, nlatent):
+    def enc_block(nb, filters):
+        init = RandomNormal(stddev=0.02)
+        nb = Conv2D(filters=filters, kernel_size=3, strides=2, padding='same', kernel_initializer = init)(nb)
+        nb = LeakyReLU(alpha=0.2)(nb)
+        return nb
+    
+    def mod_enc_block(a, nb, prefilters, postfilters):
+        init = RandomNormal(stddev=0.02)
+        inter_latent = Dense(prefilters, kernel_initializer = init)(nb)
+        a = Conv2DMod(filters=postfilters, kernel_size=3, strides=2, padding='same', kernel_initializer = init)([a, inter_latent])
+        a = LeakyReLU(alpha=0.2)(a)
+        return a
+    
+    
+    nb = enc_block(b, 16)
+    nb = enc_block(nb, 32)
+    nb = enc_block(nb, 32)
+    nb = enc_block(nb, 64)
+    nb = enc_block(nb, 64)
+    nb = enc_block(nb, 128)
+    nb = enc_block(nb, 128)
+    nb=Reshape((nb.shape[-1],))(nb) #this is the latent code used for modulated convolution
+    
+    #print(a.shape)
+    
+    na = mod_enc_block(a, nb, a.shape[-1], 16)
+    na = mod_enc_block(na, nb, 16, 32)
+    na = mod_enc_block(na, nb, 32, 32)
+    na = mod_enc_block(na, nb, 32, 64)
+    na = mod_enc_block(na, nb, 64, 64)
+    na = mod_enc_block(na, nb, 64, 128)
+    na = mod_enc_block(na, nb, 128, 128)
+    
+    na=Reshape((na.shape[-1],))(na)
+    
+    z_a = Dense(nlatent)(na)
+    return z_a
+    
+    
+    
+    
 #----------------------------------------------------------------------------------
 """Discriminator Modules for domains A and B"""
 

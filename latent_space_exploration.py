@@ -289,7 +289,7 @@ class latent_explorer(object):
         self.img_shape = img_shape
         self.latent_size = latent_size
         self.model = G_AB(img_shape, (1,1,latent_size))
-        self.model.load_weights('models/G_AB_6_2000.h5')
+        self.model.load_weights('models/G_AB_10.h5')
         
         #instantiate the LPIPS loss object
         self.lpips = lpips(self.img_shape)
