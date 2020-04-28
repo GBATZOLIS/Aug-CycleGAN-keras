@@ -53,7 +53,7 @@ class evaluator(object):
                 with tf.device('/GPU:0'):
                     self.lpips.set_reference(y_true)
                     for j in range(num_out_imgs):
-                        z = tf.random.normal(shape=(1,1,1, self.latent_size))
+                        z = tf.random.normal(shape=(1,self.latent_size))
                         y_pred = self.model([x,z])
                         distance_vals[i,j] = self.lpips.distance(y_pred)
                 i+=1
@@ -80,7 +80,7 @@ class evaluator(object):
                 y_true = plt.imread(dslr_path).astype(np.float)
                 y_true = y_true/255
                 for j in range(num_out_imgs):
-                    z = tf.random.normal(shape=(1,1,1, self.latent_size))
+                    z = tf.random.normal(shape=(1,self.latent_size))
                     y_pred = self.model([x,z])
                     y_pred = tf.make_ndarray(y_pred)
                     distance_vals[i,j] = ssim(y_pred[0],y_true, multichannel=True)
@@ -114,7 +114,7 @@ class evaluator(object):
                 with tf.device('/GPU:0'):
                     self.lpips.set_reference(y_true_tensor)
                     for j in range(num_out_imgs):
-                        z = tf.random.normal(shape=(1,1,1, self.latent_size))
+                        z = tf.random.normal(shape=(1,self.latent_size))
                         y_pred_tensor = self.model([x,z])
                         lpips_vals[i,j] = self.lpips.distance(y_pred_tensor)
                         
