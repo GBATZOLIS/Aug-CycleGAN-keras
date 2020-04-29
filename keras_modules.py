@@ -5,7 +5,7 @@ Created on Sat Feb 29 18:04:27 2020
 @author: Georgios
 """
 
-from tensorflow.keras.layers import add, ZeroPadding2D,AveragePooling2D, Reshape, Conv2D, Add, LeakyReLU, Activation, Input,DepthwiseConv2D, Dense, Lambda, BatchNormalization, Conv2DTranspose
+from tensorflow.keras.layers import add, Concatenate, ZeroPadding2D,AveragePooling2D, Reshape, Conv2D, Add, LeakyReLU, Activation, Input,DepthwiseConv2D, Dense, Lambda, BatchNormalization, Conv2DTranspose
 from tensorflow.keras.initializers import RandomNormal
 from tensorflow.keras.layers import Layer
 from tensorflow.keras.models import Model
@@ -190,36 +190,41 @@ def Alternative_Encoder(a, b, nlatent):
         nb = LeakyReLU(alpha=0.2)(nb)
         return nb
     
-    def mod_enc_block(a, nb, prefilters, postfilters):
+    def mod_enc_block(a, nb, filters):
         init = RandomNormal(stddev=0.02)
-        inter_latent = Dense(prefilters, kernel_initializer = init)(nb)
-        a = Conv2DMod(filters=postfilters, kernel_size=3, strides=2, padding='same', kernel_initializer = init)([a, inter_latent])
+        inter_latent = Dense(a.shape[-1], kernel_initializer = init)(nb)
+        a = Conv2DMod(filters=filters, kernel_size=3, strides=2, padding='same', kernel_initializer = init)([a, inter_latent])
         a = LeakyReLU(alpha=0.2)(a)
         return a
     
+    def latent_encoder(b, base_filter):
+        nb = enc_block(b, base_filter)
+        nb = enc_block(nb, 2*base_filter)
+        nb = enc_block(nb, 2*base_filter)
+        nb = enc_block(nb, 4*base_filter)
+        nb = enc_block(nb, 4*base_filter)
+        nb = enc_block(nb, 8*base_filter)
+        nb = enc_block(nb, 8*base_filter)
+        nb = Reshape((nb.shape[-1]*nb.shape[-2]*nb.shape[-3],))(nb) #this is the latent code used for modulated convolution
+        return nb
     
-    nb = enc_block(b, 16)
-    nb = enc_block(nb, 32)
-    nb = enc_block(nb, 32)
-    nb = enc_block(nb, 64)
-    nb = enc_block(nb, 64)
-    nb = enc_block(nb, 128)
-    nb = enc_block(nb, 128)
-    nb=Reshape((nb.shape[-1],))(nb) #this is the latent code used for modulated convolution
+    def modulated_latent_encoder(a, nb, base_filter):
+        na = mod_enc_block(a, nb, base_filter)
+        na = mod_enc_block(na, nb, 2*base_filter)
+        na = mod_enc_block(na, nb, 2*base_filter)
+        na = mod_enc_block(na, nb, 4*base_filter)
+        na = mod_enc_block(na, nb, 4*base_filter)
+        na = mod_enc_block(na, nb, 8*base_filter)
+        na = mod_enc_block(na, nb, 8*base_filter)
+        na=Reshape((na.shape[-1]*na.shape[-2]*na.shape[-3],))(na)
+        return na
+
+    nb = latent_encoder(b, 16)
+    na = modulated_latent_encoder(a, nb, 16)
+    n = Concatenate(axis=-1)([na, nb])
     
-    #print(a.shape)
+    z_a = Dense(nlatent)(n)
     
-    na = mod_enc_block(a, nb, a.shape[-1], 16)
-    na = mod_enc_block(na, nb, 16, 32)
-    na = mod_enc_block(na, nb, 32, 32)
-    na = mod_enc_block(na, nb, 32, 64)
-    na = mod_enc_block(na, nb, 64, 64)
-    na = mod_enc_block(na, nb, 64, 128)
-    na = mod_enc_block(na, nb, 128, 128)
-    
-    na=Reshape((na.shape[-1],))(na)
-    
-    z_a = Dense(nlatent)(na)
     return z_a
     
     
