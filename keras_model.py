@@ -321,7 +321,7 @@ class AugCycleGAN(object):
             self.train_info['losses']['unsup']['rec_Za'].append(rec_Za)
             
             cycle_B_Za_loss = adv_gen_A + adv_gen_Zb + rec_b_dist + rec_Za
-            print(cycle_B_Za_loss)
+            #print(cycle_B_Za_loss)
 
         D_A_grads = tape.gradient(D_A_loss, self.D_A.trainable_variables)
         self.D_A_opt.apply_gradients(zip(D_A_grads, self.D_A.trainable_variables))
@@ -484,10 +484,10 @@ class AugCycleGAN(object):
                                  'D_A', D_A_loss, 'D_B', D_B_loss, 'D_Za', D_Za_loss, 'D_Zb', D_Zb_loss,
                                  'cyc_A_Zb', cycle_A_Zb_loss, 'cyc_B_Za', cycle_B_Za_loss,
                                  'sup_a', sup_a, 'sup_b', sup_b, 
-                                 'ppl_AB', 0,
-                                 'ppl_BA', 0,
-                                 'ms_AB',0,
-                                 'ms_BA',0,
+                                 'ppl_AB', self.train_info['losses']['reg']['ppl_G_AB'][-1],
+                                 'ppl_BA', self.train_info['losses']['reg']['ppl_G_ΒΑ'][-1],
+                                 'ms_AB', self.train_info['losses']['reg']['ms_G_AB'][-1],
+                                 'ms_BA', self.train_info['losses']['reg']['ms_G_AB'][-1],
                                  elapsed_time))
     
                     if batch % 400 == 0 and not(batch==0 and epoch==0):
@@ -645,4 +645,4 @@ class AugCycleGAN(object):
             
             
 model = AugCycleGAN((100,100,3), (1,1,4), resume=False)
-model.train(epochs=100, batch_size = 1)
+model.train(epochs=100, batch_size = 20)
