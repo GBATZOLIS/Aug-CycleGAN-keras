@@ -101,7 +101,7 @@ class lpips(object):
                         collapsed_sum_scaled = collapsed_sum/(H*W)
                         distance+=collapsed_sum_scaled
                     
-                    distance = K.get_value(distance)
+                    #distance = K.get_value(distance)
                     
                     total_distance+=distance
                 

@@ -293,12 +293,6 @@ class AugCycleGAN(object):
             #1st map
             a_hat = self.G_BA([b, z_a], training=True)
             fake_a = self.D_A(a_hat, training=True)
-            
-            #a_hat2 = self.G_BA([b, z_a2], training=True)
-            #fake_a2 = self.D_A(a_hat2, training=True)
-            
-            #a_hat_blur=self.blurring(a_hat, training=False)
-            #b_blur = self.blurring(b, training=False)
 
             z_b_hat = self.E_B([a_hat, b], training=True)
             fake_z_b = self.D_Zb(z_b_hat, training=True)
@@ -326,11 +320,8 @@ class AugCycleGAN(object):
             rec_Za = L1_loss(z_a_cyc,z_a)
             self.train_info['losses']['unsup']['rec_Za'].append(rec_Za)
             
-            #blur_ba = L1_loss(b_blur,a_hat_blur)
-            #self.train_info['losses']['unsup']['blur_ba'].append(blur_ba)
-            #lcr_gen = -0.2*L1_loss(a_hat, a_hat2)
-            
             cycle_B_Za_loss = adv_gen_A + adv_gen_Zb + rec_b_dist + rec_Za
+            print(cycle_B_Za_loss)
 
         D_A_grads = tape.gradient(D_A_loss, self.D_A.trainable_variables)
         self.D_A_opt.apply_gradients(zip(D_A_grads, self.D_A.trainable_variables))
@@ -361,9 +352,8 @@ class AugCycleGAN(object):
             z_b_dash = tf.random.normal((a.shape[0], self.latent_shape[-1]), dtype=tf.float32)
             b_hat_dash = self.G_AB([a,z_b_dash], training=True)
             
-            mode_seeking_rt_AB = self.lpips.distance(b_hat, b_hat_dash)/(tf.norm(z_b - z_b_dash)+1e-8)
-            mode_seeking_loss_AB = -1*mode_seeking_rt_AB
-            self.train_info['losses']['reg']['ms_G_AB'].append(mode_seeking_loss_AB)
+            mode_seeking_loss_AB = -1*self.lpips.distance(b_hat, b_hat_dash)/(tf.norm(z_b - z_b_dash)+1e-8)
+            self.train_info['losses']['reg']['ms_G_AB'].append(-1*mode_seeking_loss_AB)
             
             #-----------------------------------------------
             z_a = tf.random.normal((b.shape[0], self.latent_shape[-1]), dtype=tf.float32)
@@ -372,9 +362,8 @@ class AugCycleGAN(object):
             z_a_dash = tf.random.normal((b.shape[0], self.latent_shape[-1]), dtype=tf.float32)
             a_hat_dash = self.G_BA([b,z_a_dash], training=True)
             
-            mode_seeking_rt_BA = self.lpips.distance(a_hat, a_hat_dash)/(tf.norm(z_a - z_a_dash)+1e-8)
-            mode_seeking_loss_BA = -1*mode_seeking_rt_BA
-            self.train_info['losses']['reg']['ms_G_BA'].append(mode_seeking_loss_BA)
+            mode_seeking_loss_BA = -1*self.lpips.distance(a_hat, a_hat_dash)/(tf.norm(z_a - z_a_dash)+1e-8)
+            self.train_info['losses']['reg']['ms_G_BA'].append(-1*mode_seeking_loss_BA)
             
         #update the generator models G_AB and G_BA
         G_AB_grads = tape.gradient(mode_seeking_loss_AB, self.G_AB.trainable_variables)
@@ -483,7 +472,7 @@ class AugCycleGAN(object):
                     if batch % 2 == 1:
                         self.ppl_regularisation(img_A, img_B)
                         
-                    if batch % 25 == 1:
+                    if batch % 20 == 2:
                         self.mode_seeking_regularisation(img_A, img_B)
                     
                     
@@ -656,4 +645,4 @@ class AugCycleGAN(object):
             
             
 model = AugCycleGAN((100,100,3), (1,1,4), resume=False)
-model.train(epochs=100, batch_size = 20)
+model.train(epochs=100, batch_size = 1)
