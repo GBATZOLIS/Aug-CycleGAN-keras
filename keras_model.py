@@ -361,7 +361,7 @@ class AugCycleGAN(object):
             z_b_dash = tf.random.normal((a.shape[0], self.latent_shape[-1]), dtype=tf.float32)
             b_hat_dash = self.G_AB([a,z_b_dash], training=True)
             
-            mode_seeking_rt_AB = L1_loss(b_hat, b_hat_dash)/(L1_loss(z_b, z_b_dash)+1e-8)
+            mode_seeking_rt_AB = self.lpips.distance(b_hat, b_hat_dash)/(tf.norm(z_b - z_b_dash)+1e-8)
             mode_seeking_loss_AB = -1*mode_seeking_rt_AB
             self.train_info['losses']['reg']['ms_G_AB'].append(mode_seeking_loss_AB)
             
@@ -372,7 +372,7 @@ class AugCycleGAN(object):
             z_a_dash = tf.random.normal((b.shape[0], self.latent_shape[-1]), dtype=tf.float32)
             a_hat_dash = self.G_BA([b,z_a_dash], training=True)
             
-            mode_seeking_rt_BA = L1_loss(a_hat, a_hat_dash)/(L1_loss(z_a, z_a_dash)+1e-8)
+            mode_seeking_rt_BA = self.lpips.distance(a_hat, a_hat_dash)/(tf.norm(z_a - z_a_dash)+1e-8)
             mode_seeking_loss_BA = -1*mode_seeking_rt_BA
             self.train_info['losses']['reg']['ms_G_BA'].append(mode_seeking_loss_BA)
             
@@ -395,8 +395,7 @@ class AugCycleGAN(object):
             z_b_dash = z_b + 0.1*tf.random.normal((a.shape[0], self.latent_shape[-1]), dtype=tf.float32)
             b_hat_dash = self.G_AB([a,z_b_dash], training=True)
             
-            delta_G_AB = tf.math.sqrt(tf.math.reduce_sum(tf.math.square(b_hat-b_hat_dash), axis=[1,2,3]))
-            pl_lengths_G_AB = delta_G_AB
+            pl_lengths_G_AB = tf.math.sqrt(tf.math.reduce_sum(tf.math.square(b_hat-b_hat_dash), axis=[1,2,3]))
             
             ppl_loss_G_AB = tf.math.reduce_mean(tf.math.square(pl_lengths_G_AB - self.pl_mean_G_AB))
             self.train_info['losses']['reg']['ppl_G_AB'].append(ppl_loss_G_AB)
@@ -409,8 +408,7 @@ class AugCycleGAN(object):
             z_a_dash = z_a + 0.1*tf.random.normal((b.shape[0], self.latent_shape[-1]), dtype=tf.float32)
             a_hat_dash = self.G_BA([b,z_a_dash], training=True)
             
-            delta_G_BA = tf.math.sqrt(tf.math.reduce_sum(tf.math.square(a_hat-a_hat_dash), axis=[1,2,3]))
-            pl_lengths_G_BA = delta_G_BA
+            pl_lengths_G_BA = tf.math.sqrt(tf.math.reduce_sum(tf.math.square(a_hat-a_hat_dash), axis=[1,2,3]))
             
             ppl_loss_G_BA = tf.math.reduce_mean(tf.math.square(pl_lengths_G_BA - self.pl_mean_G_BA))
             self.train_info['losses']['reg']['ppl_G_BA'].append(ppl_loss_G_BA)
