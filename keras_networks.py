@@ -58,13 +58,13 @@ def E_B(img_shape, latent_shape):
 
 def D_A(img_shape):
     img=Input(img_shape)
-    result = styleGAN_disc(img)
+    result = img_domain_critic(img)
     model = Model(inputs=img, outputs=result, name='DA')
     return model
 
 def D_B(img_shape):
     img=Input(img_shape)
-    result = styleGAN_disc(img)
+    result = img_domain_critic(img)
     model = Model(inputs=img, outputs=result, name='DB')
     return model
 

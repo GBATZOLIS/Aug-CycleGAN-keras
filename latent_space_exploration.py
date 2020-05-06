@@ -289,7 +289,7 @@ class latent_explorer(object):
         self.img_shape = img_shape
         self.latent_size = latent_size
         self.model = G_AB(img_shape, (1,1,latent_size))
-        self.model.load_weights('models/G_AB_10.h5')
+        self.model.load_weights('models/G_AB_16.h5')
         
         #instantiate the LPIPS loss object
         self.lpips = lpips(self.img_shape)
@@ -310,12 +310,11 @@ class latent_explorer(object):
             images=[]
             
             z_start=start
-            for _ in range(3):
-                z_start=np.expand_dims(z_start, axis=0)
+            z_start=np.expand_dims(z_start, axis=0)
                 
             
-            for i in tqdm(range(200)):
-                z_new=z_start+0.05*np.random.randn(1,1,1,self.latent_size)
+            for i in tqdm(range(300)):
+                z_new=z_start+0.3*np.random.randn(1, self.latent_size)
                 z_start=z_new
                 fake_b = self.model_func(a, z_new)
                 if type(ref)==int:
@@ -326,16 +325,16 @@ class latent_explorer(object):
                 images.append(frame)
             
             print(np.linalg.norm(np.squeeze(z_start-start), ord=2))
-            images[0].save('progress/gif/random/%s.gif' % (str(name)),
+            images[0].save('progress/gif/random/%s.gif' % (name),
                                         save_all=True, 
                                         append_images=images[::-1], 
                                         optimize=False, duration=80, loop=1) 
         
         elif gif_type=='normal':
             images=[]
-            for i in range(200):
-                z=np.array(tf.random.truncated_normal(shape=(1,1,1,self.latent_size)))
-                #z = np.random.randn(1,1,1,self.latent_size)
+            for i in range(150):
+                #z=np.array(tf.random.truncated_normal(shape=(1, self.latent_size)))
+                z = np.random.randn(1,self.latent_size)
                 fake_b = self.model_func(a, z)
                 
                 if type(ref)==int:
@@ -345,7 +344,7 @@ class latent_explorer(object):
                 
                 images.append(frame)
             
-            images[0].save('progress/gif/random/%s.gif' % (str(name)),
+            images[0].save('progress/gif/random/%s.gif' % (name),
                                         save_all=True, 
                                         append_images=images[::-1], 
                                         optimize=False, duration=100, loop=0) 
@@ -355,8 +354,7 @@ class latent_explorer(object):
         if metric=='ssim':
             def func(z):
                 #z=np.swapaxes(z,0,1)
-                for _ in range(3):
-                    z=np.expand_dims(z,axis=0)
+                z=np.expand_dims(z,axis=0)
                 #z is the latent vector
                 mode_output=self.model.predict([img_A,z])[0]
                 frame = Image.fromarray((np.concatenate((np.squeeze(img_A,axis=0), mode_output, img_B), axis=1) * 255).astype(np.uint8))
@@ -366,8 +364,7 @@ class latent_explorer(object):
             self.lpips.set_reference(tf.convert_to_tensor(np.expand_dims(img_B,axis=0), dtype=tf.float32))
             def func(z):
                 #z=np.swapaxes(z,0,1)
-                for _ in range(3):
-                    z=np.expand_dims(z,axis=0)
+                z=np.expand_dims(z,axis=0)
                 z=tf.convert_to_tensor(z, dtype=tf.float32)
                 
                 #z is the latent vector
@@ -425,17 +422,14 @@ latent_exp = latent_explorer((100,100,3), 4)
 
 
 
-names=[296,331,364,378,379,397,484,554,597,595,600,783,790,
+names=[8, 16, 19, 58, 160, 168, 220, 263, 296, 300, 331,364,378,379,397, 433, 484,554,597,595,600,774, 783,790,
        833, 839, 847, 849, 850, 885, 913, 936, 939, 1034, 1047, 1107, 1121, 1144, 1176, 1253,
        1300, 1372, 1384, 1428, 1443, 1494, 1528, 1607, 1628, 1660, 1671, 1701, 1705, 1755, 1776, 2047, 3056
        ]
 
 
 
-#names=[100, 201, 307, 445, 1927, 3033, 3017, 3177, 3424, 3425]
-#names=np.arange(25)
-
-
+"""
 for counter, name in tqdm(enumerate(names)):
     print(name)
     x_true = plt.imread('data/testA/%s.jpg'% str(name)).astype(np.float)
@@ -446,8 +440,23 @@ for counter, name in tqdm(enumerate(names)):
     y_true = plt.imread('data/testB/%s.jpg'% str(name)).astype(np.float)
     y_true = y_true/255
     
-    #opt_loc, opt_value=latent_exp.mode_search(x,y_true, metric='lpips')
-    latent_exp.create_gif(counter, x, y_true, start=0, gif_type='normal')
+    opt_loc, opt_value=latent_exp.mode_search(x,y_true, metric='lpips')
+    print(opt_loc)
+    latent_exp.create_gif(str(name)+'_opt', x, y_true, start=opt_loc, gif_type='random_walk')
+
+"""
+
+for name in tqdm(names):
+    print(name)
+    x_true = plt.imread('data/testA/%s.jpg'% str(name)).astype(np.float)
+    x_true = x_true/255
+    #x_true = get_random_patch(x_true, (500,500))
+    x = np.expand_dims(x_true, axis=0)
+            
+    y_true = plt.imread('data/testB/%s.jpg'% str(name)).astype(np.float)
+    y_true = y_true/255
+        
+    latent_exp.create_gif(str(name)+'_opt', x, y_true, start=0, gif_type='normal')
 
 
 

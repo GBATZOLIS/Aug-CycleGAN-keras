@@ -180,6 +180,7 @@ def LatentEncoder(concat_A_B, nef, z_dim):
     """
 
     encoding = Conv2D(filters=z_dim, kernel_size=1, strides=1, padding='valid', kernel_initializer = init)(concat_A_B)
+    encoding = Reshape((encoding.shape[-1]*encoding.shape[-2]*encoding.shape[-3],))(encoding)
     
     return encoding
 
@@ -220,8 +221,7 @@ def Alternative_Encoder(a, b, nlatent):
         return na
 
     nb = latent_encoder(b, 16)
-    na = modulated_latent_encoder(a, nb, 16)
-    n = Concatenate(axis=-1)([na, nb])
+    n = modulated_latent_encoder(a, nb, 16)
     
     z_a = Dense(nlatent)(n)
     

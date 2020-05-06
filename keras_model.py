@@ -481,10 +481,13 @@ class AugCycleGAN(object):
                     if batch % 10 == 0 and not(batch==0 and epoch==0):
                         self.EMA() #update the inference model with exponential moving average
                     
-                    """
-                    if batch % 40 == 1:
+                    
+                    if batch % 2 == 1:
                         self.ppl_regularisation(img_A, img_B)
-                    """
+                        
+                    if batch % 25 == 1:
+                        self.mode_seeking_regularisation(img_A, img_B)
+                    
                     
                     #generate the noise vectors from the N(0,sigma^2) distribution
                     if batch % 100 == 0 and not(batch==0 and epoch==0):
