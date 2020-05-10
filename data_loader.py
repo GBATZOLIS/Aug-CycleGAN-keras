@@ -38,23 +38,15 @@ class DataLoader():
             
             return img[x_index:x_index+patch_dimension[0], y_index:y_index+patch_dimension[1], :]
         
-    def load_data(self, domain, patch_dimension=None, batch_size=1, is_testing=False):
-        data_type = r"train%s" % domain if not is_testing else "test%s" % domain
-        path = glob(r'data/%s/*.jpg' % (data_type))
-        batch_images = np.random.choice(path, size=batch_size)
-        
-        if patch_dimension==None:
-            #if the patch dimension is not specified, use the training dimensions
-            patch_dimension = self.img_res
-            
+    def load_data(self, batch_size, dataset='test', domain='A'):
+        paths = glob('data/%s%s/*.jpg' % (dataset, domain))
+        paths = np.random.choice(paths, batch_size, replace=False)
         imgs = []
-        for img_path in batch_images:
-            img = self.imread(img_path)
-            img = self.get_random_patch(img, patch_dimension)   
+        for path in paths:
+            img = self.imread(path)
             imgs.append(img)
-
+        
         imgs = np.array(imgs)/255
-
         return imgs
     
     def load_paired_data(self, batch_size=None, is_testing=True):
@@ -87,6 +79,35 @@ class DataLoader():
         
         return phone_imgs, dslr_imgs
     
+    def load_unpaired_batch(self, batch_size, dataset='train', portion=0.25):
+        path_A = glob('data/%sA/*.jpg' % dataset)
+        path_B = glob('data/%sB/*.jpg' % dataset)
+        
+        n_batches = int(min(len(path_A), len(path_B)) / batch_size)
+        total_samples = n_batches * batch_size
+        
+        used_samples = int(portion*total_samples)
+        path_A = np.random.choice(path_A, used_samples, replace=False)
+        path_B = np.random.choice(path_B, used_samples, replace=False)
+        
+        self.n_batches = used_samples // batch_size
+        
+        for i in range(self.n_batches):
+            batch_A = path_A[i*batch_size:(i+1)*batch_size]
+            batch_B = path_B[i*batch_size:(i+1)*batch_size]
+            imgs_A, imgs_B= [], []
+            
+            for img_A, img_B in zip(batch_A, batch_B):
+                img_A = self.imread(img_A)
+                img_B = self.imread(img_B) 
+                imgs_A.append(img_A)
+                imgs_B.append(img_B)
+            
+            imgs_A = np.array(imgs_A)/255
+            imgs_B = np.array(imgs_B)/255
+            yield imgs_A, imgs_B
+        
+        
     def load_batch(self, batch_size=1, is_testing=False):
         data_type = "train" if not is_testing else "val"
         sup_path_A = glob(r'data/%sA/*.jpg' % (data_type))

@@ -289,7 +289,7 @@ class latent_explorer(object):
         self.img_shape = img_shape
         self.latent_size = latent_size
         self.model = G_AB(img_shape, (1,1,latent_size))
-        self.model.load_weights('models/G_AB_16.h5')
+        self.model.load_weights('models/G_AB_36.h5')
         
         #instantiate the LPIPS loss object
         self.lpips = lpips(self.img_shape)
@@ -333,8 +333,8 @@ class latent_explorer(object):
         elif gif_type=='normal':
             images=[]
             for i in range(150):
-                #z=np.array(tf.random.truncated_normal(shape=(1, self.latent_size)))
-                z = np.random.randn(1,self.latent_size)
+                z=np.array(tf.random.truncated_normal(shape=(1, self.latent_size)))
+                #z = np.random.randn(1,self.latent_size)
                 fake_b = self.model_func(a, z)
                 
                 if type(ref)==int:
