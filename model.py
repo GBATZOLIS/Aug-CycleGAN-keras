@@ -482,8 +482,8 @@ class AugCycleGAN(object):
                     if batch % 10 == 0 and not(batch==0 and epoch==0):
                         self.EMA() #update the inference model with exponential moving average
                     
-                    #if batch % 2 == 1:
-                    #    self.ppl_regularisation(img_A, img_B)
+                    if batch % 12 == 1:
+                        self.ppl_regularisation(img_A, img_B)
                         
                     #if batch % 20 == 2:
                     #    self.mode_seeking_regularisation(img_A, img_B)

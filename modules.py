@@ -112,7 +112,7 @@ def CINResnetGenerator(image, noise, filters, nlatent):
     
     R3_o = Add()([R3_i, R3_o])
     
-    for i in range(2):
+    for i in range(3):
         R3_o = g_block(R3_o, noise, 4*filters)
     
     R2_o = Conv2DTranspose(filters = 2*filters, kernel_size=3, strides=2, padding='same', kernel_initializer=init)(R3_o)
@@ -120,7 +120,7 @@ def CINResnetGenerator(image, noise, filters, nlatent):
     
     R2_o = Add()([R2_i, R2_o])
     
-    for i in range(2):
+    for i in range(4):
         R2_o = g_block(R2_o, noise, 2*filters)
     
     R1_o = Conv2DTranspose(filters = filters, kernel_size=3, strides=2, padding='same', kernel_initializer=init)(R2_o)
@@ -128,8 +128,8 @@ def CINResnetGenerator(image, noise, filters, nlatent):
     
     R1_o = Add()([R1_i, R1_o])
     
-    for i in range(2):
-        R1_o = g_block(R1_o, noise, 2*filters)
+    for i in range(5):
+        R1_o = g_block(R1_o, noise, filters)
     
     
     out_image = Conv2D(filters = 3, kernel_size=7, padding='same', kernel_initializer = init)(R1_o) 
