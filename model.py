@@ -508,7 +508,7 @@ class AugCycleGAN(object):
                                  'Rec_Zb', self.train_info['losses']['unsup']['rec_Zb'][-1],
                                  elapsed_time))
     
-                    if batch % 20 == 0 and not(batch==0 and epoch==0):
+                    if batch % 100 == 0 and not(batch==0 and epoch==0):
                         training_point = np.around(epoch+batch/self.data_loader.n_batches, 4)
                         self.train_info['performance']['eval_points'].append(training_point)
                         

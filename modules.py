@@ -268,7 +268,7 @@ def styleGAN_disc(img, cha=16):
     out = Conv2D(filters=1, kernel_size=4, strides=1, padding='same', kernel_initializer = init)(x)
     return out
     
-def img_domain_critic(img, ndf=64):
+def img_domain_critic(img, ndf=32):
     init = RandomNormal(stddev=0.02)
     
     kw=4
@@ -284,6 +284,10 @@ def img_domain_critic(img, ndf=64):
     img = LeakyReLU(alpha=0.2)(img)
     
     img = Conv2D(filters=8*ndf, kernel_size=kw, strides=2, padding='same', kernel_initializer = init)(img)
+    img = BatchNormalization(axis=-1)(img)
+    img = LeakyReLU(alpha=0.2)(img)
+    
+    img = Conv2D(filters=16*ndf, kernel_size=kw, strides=2, padding='same', kernel_initializer = init)(img)
     img = BatchNormalization(axis=-1)(img)
     img = LeakyReLU(alpha=0.2)(img)
     
