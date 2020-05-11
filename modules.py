@@ -167,34 +167,43 @@ def celeb_generator(image, noise, filters, nlatent):
     R5_o = R5_i
     for i in range(2):
         R5_o = g_block(R5_o, noise, 16*filters)
-    
+        
     R4_o = Conv2DTranspose(filters = 8*filters, kernel_size=3, strides=2, padding='same', kernel_initializer=init)(R5_o)
     R4_o = LeakyReLU(alpha=0.2)(R4_o)
     
+    R4_o = Add()([R4_i, R4_o])
+    
     for i in range(2):
         R4_o = g_block(R4_o, noise, 8*filters)
-        
+    
     R3_o = Conv2DTranspose(filters = 4*filters, kernel_size=3, strides=2, padding='same', kernel_initializer=init)(R4_o)
     R3_o = LeakyReLU(alpha=0.2)(R3_o)
     
-    for i in range(2):
+    R3_o = Add()([R3_i, R3_o])
+    
+    for i in range(3):
         R3_o = g_block(R3_o, noise, 4*filters)
     
     R2_o = Conv2DTranspose(filters = 2*filters, kernel_size=3, strides=2, padding='same', kernel_initializer=init)(R3_o)
     R2_o = LeakyReLU(alpha=0.2)(R2_o)
     
-    for i in range(2):
+    R2_o = Add()([R2_i, R2_o])
+    
+    for i in range(4):
         R2_o = g_block(R2_o, noise, 2*filters)
     
     R1_o = Conv2DTranspose(filters = filters, kernel_size=3, strides=2, padding='same', kernel_initializer=init)(R2_o)
     R1_o = LeakyReLU(alpha=0.2)(R1_o)
     
-    for i in range(2):
+    R1_o = Add()([R1_i, R1_o])
+    
+    for i in range(5):
         R1_o = g_block(R1_o, noise, filters)
+    
     
     out_image = Conv2D(filters = 3, kernel_size=7, padding='same', kernel_initializer = init)(R1_o) 
     out_image = Activation('tanh')(out_image)
-    out_image = Lambda(lambda x: 0.5*x + 0.5, output_shape=lambda x:x)(out_image)
+    out_image = Lambda(lambda x: 0.5*x + 0.5, output_shape=lambda x:x)(out_image) 
     
     return out_image
     
