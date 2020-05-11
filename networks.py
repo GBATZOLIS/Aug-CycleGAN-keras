@@ -89,5 +89,7 @@ def N_map(latent_shape, domain):
     return model
 
 #model=E_A((100,100,3), (1,1,4))
+#print(model.summary())
 
+#model = D_A((256,256,3))
 #print(model.summary())

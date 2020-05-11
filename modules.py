@@ -279,11 +279,11 @@ def img_domain_critic(img, ndf=64):
     img = BatchNormalization(axis=-1)(img)
     img = LeakyReLU(alpha=0.2)(img)
     
-    img = Conv2D(filters=4*ndf, kernel_size=kw, strides=1, padding='same', kernel_initializer = init)(img)
+    img = Conv2D(filters=4*ndf, kernel_size=kw, strides=2, padding='same', kernel_initializer = init)(img)
     img = BatchNormalization(axis=-1)(img)
     img = LeakyReLU(alpha=0.2)(img)
     
-    img = Conv2D(filters=4*ndf, kernel_size=kw, strides=1, padding='same', kernel_initializer = init)(img)
+    img = Conv2D(filters=8*ndf, kernel_size=kw, strides=2, padding='same', kernel_initializer = init)(img)
     img = BatchNormalization(axis=-1)(img)
     img = LeakyReLU(alpha=0.2)(img)
     

@@ -490,17 +490,22 @@ class AugCycleGAN(object):
                     
                     
                     #generate the noise vectors from the N(0,sigma^2) distribution
-                    if batch % 20 == 0 and not(batch==0 and epoch==0):
+                    if batch % 50 == 0 and not(batch==0 and epoch==0):
                         elapsed_time = chop_microseconds(datetime.datetime.now() - start_time)
-                        print('[%d/%d][%d/%d]-[%s:%.3f %s:%.3f %s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f %s:%.3f %s:%.3f]-[time:%s]'
+                        print('[%d/%d][%d/%d]-[%s:%.3f %s:%.3f %s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f %s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f %s:%.3f %s:%.3f]-[time:%s]'
                               % (epoch, epochs, batch, self.data_loader.n_batches,
-                                 'D_A', D_A_loss, 'D_B', D_B_loss, 'D_Za', D_Za_loss, 'D_Zb', D_Zb_loss,
-                                 'cyc_A_Zb', cycle_A_Zb_loss, 'cyc_B_Za', cycle_B_Za_loss,
-                                 'sup_a', 0, 'sup_b', 0, 
-                                 'ppl_AB', 0,
-                                 'ppl_BA', 0,
-                                 'ms_AB', 0,
-                                 'ms_BA', 0,
+                                 'D_A', D_A_loss, 
+                                 'D_B', D_B_loss, 
+                                 'D_Za', D_Za_loss, 
+                                 'D_Zb', D_Zb_loss,
+                                 'Adv_A', self.train_info['losses']['unsup']['G_A'][-1] , 
+                                 'Adv_B', self.train_info['losses']['unsup']['G_B'][-1],
+                                 'Adv_Za', self.train_info['losses']['unsup']['E_A'][-1],
+                                 'Adv_Zb', self.train_info['losses']['unsup']['E_B'][-1],
+                                 'Rec_A', self.train_info['losses']['unsup']['rec_a_dist'][-1],
+                                 'Rec_B', self.train_info['losses']['unsup']['rec_b_dist'][-1],
+                                 'Rec_Za', self.train_info['losses']['unsup']['rec_Za'][-1],
+                                 'Rec_Zb', self.train_info['losses']['unsup']['rec_Zb'][-1],
                                  elapsed_time))
     
                     if batch % 20 == 0 and not(batch==0 and epoch==0):
