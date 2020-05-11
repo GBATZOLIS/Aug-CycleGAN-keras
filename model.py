@@ -463,7 +463,7 @@ class AugCycleGAN(object):
             #create a dynamic evaluator object
             dynamic_evaluator = evaluator(self.img_shape, self.latent_shape)
             for epoch in range(epochs):
-                for batch, (img_A, img_B) in enumerate(self.data_loader.load_unpaired_batch(batch_size, portion = 0.2)):
+                for batch, (img_A, img_B) in enumerate(self.data_loader.load_unpaired_batch(batch_size, portion = 1)):
                     img_A = tf.convert_to_tensor(img_A, dtype=tf.float32)
                     img_B = tf.convert_to_tensor(img_B, dtype=tf.float32)
                     
@@ -670,5 +670,5 @@ class AugCycleGAN(object):
                 
             
             
-model = AugCycleGAN((256,256,3), (1,1,16), resume=False)
+model = AugCycleGAN((256,256,3), (1,1,32), resume=False)
 model.train(epochs=100, batch_size = 10)
