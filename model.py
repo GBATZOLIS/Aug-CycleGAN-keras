@@ -670,5 +670,5 @@ class AugCycleGAN(object):
                 
             
             
-model = AugCycleGAN((100,100,3), (1,1,4), resume=False)
-model.train(epochs=100, batch_size = 1)
+model = AugCycleGAN((256,256,3), (1,1,16), resume=False)
+model.train(epochs=100, batch_size = 10)

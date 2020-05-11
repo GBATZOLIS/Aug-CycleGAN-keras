@@ -100,14 +100,14 @@ def CINResnetGenerator(image, noise, filters, nlatent):
     R3 = Conv2D(filters = 4*filters, kernel_size=3, strides=2, padding='same', kernel_initializer = init)(R2_i)
     R3_i = LeakyReLU(alpha=0.2)(R3)
     
-    R4 = Conv2D(filters = 8*filters, kernel_size=3, strides=2, padding='valid', kernel_initializer = init)(R3_i)
+    R4 = Conv2D(filters = 8*filters, kernel_size=3, strides=2, padding='same', kernel_initializer = init)(R3_i)
     R4_i = LeakyReLU(alpha=0.2)(R4)
     
     R4_o=R4_i
     for i in range(2):
         R4_o = g_block(R4_o, noise, 8*filters)
     
-    R3_o = Conv2DTranspose(filters = 4*filters, kernel_size=3, strides=2, padding='valid', kernel_initializer=init)(R4_o)
+    R3_o = Conv2DTranspose(filters = 4*filters, kernel_size=3, strides=2, padding='same', kernel_initializer=init)(R4_o)
     R3_o = LeakyReLU(alpha=0.2)(R3_o)
     
     R3_o = Add()([R3_i, R3_o])
