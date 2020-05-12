@@ -283,6 +283,8 @@ class AugCycleGAN(object):
         self.D_Za_opt.apply_gradients(zip(D_Za_grads, self.D_Za.trainable_variables))
            
         if ppl:
+            print(cycle_A_Zb_loss)
+            print(ppl_loss_G_AB)
             G_AB_loss = cycle_A_Zb_loss + ppl_loss_G_AB
             
             #do the exponential moving average update step for the mean ppl
