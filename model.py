@@ -242,7 +242,7 @@ class AugCycleGAN(object):
             fake_b = self.D_B(b_hat, training=True)
             
             if ppl:
-                z_b_dash = z_b + 0.05*tf.random.normal((a.shape[0], self.latent_shape[-1]), dtype=tf.float32)
+                z_b_dash = z_b + 0.005*tf.random.normal((a.shape[0], self.latent_shape[-1]), dtype=tf.float32)
                 b_hat_dash = self.G_AB([a,z_b_dash], training=True)
                 pl_lengths_G_AB = tf.math.reduce_sum(tf.math.abs(b_hat-b_hat_dash), axis=[1,2,3])
                 ppl_loss_G_AB = tf.math.reduce_mean(tf.math.abs(pl_lengths_G_AB - self.pl_mean_G_AB))
@@ -277,9 +277,9 @@ class AugCycleGAN(object):
             cycle_A_Zb_loss = adv_gen_B + adv_gen_Za + rec_a_dist + rec_Zb
             
             if ppl:
-                print("------------------------------------")
-                print(cycle_A_Zb_loss)
-                print(ppl_loss_G_AB)
+                #print("------------------------------------")
+                #print(cycle_A_Zb_loss)
+                #print(ppl_loss_G_AB)
                 G_AB_loss = cycle_A_Zb_loss + ppl_loss_G_AB
                 #do the exponential moving average update step for the mean ppl
                 if self.pl_mean_G_AB==0.:
@@ -311,7 +311,6 @@ class AugCycleGAN(object):
         return D_B_loss, D_Za_loss, cycle_A_Zb_loss
     
     def step_cycle_B(self, a, b, z_a, z_b, ppl=False):
-        #z_a2 = z_a + 0.07*tf.random.normal((b.shape[0], 1, 1, self.latent_shape[-1]), dtype=tf.float32)
         
         with tf.GradientTape(persistent=True) as tape:
             #1st map
@@ -319,7 +318,7 @@ class AugCycleGAN(object):
             fake_a = self.D_A(a_hat, training=True)
             
             if ppl:
-                z_a_dash = z_a + 0.05*tf.random.normal((b.shape[0], self.latent_shape[-1]), dtype=tf.float32)
+                z_a_dash = z_a + 0.005*tf.random.normal((b.shape[0], self.latent_shape[-1]), dtype=tf.float32)
                 a_hat_dash = self.G_BA([b,z_a_dash], training=True)
                 pl_lengths_G_BA = tf.math.reduce_sum(tf.math.abs(a_hat-a_hat_dash), axis=[1,2,3])
                 ppl_loss_G_BA = tf.math.reduce_mean(tf.math.abs(pl_lengths_G_BA - self.pl_mean_G_BA))

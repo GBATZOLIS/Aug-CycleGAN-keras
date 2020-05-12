@@ -338,30 +338,33 @@ def styleGAN_disc(img, cha=16):
     out = Conv2D(filters=1, kernel_size=4, strides=1, padding='same', kernel_initializer = init)(x)
     return out
     
-def img_domain_critic(img, ndf=32):
+def img_domain_critic(img, filters=64):
     init = RandomNormal(stddev=0.02)
     
-    kw=4
-    img = Conv2D(filters=ndf, kernel_size=kw, strides=2, padding='same', kernel_initializer = init)(img)
+    def down_block(img, filters, kernel_size=3):
+        img = SpectralNormalization(Conv2D(filters=filters, kernel_size=kernel_size, strides=2, padding='same', kernel_initializer = init), dynamic=True)(img)
+        img = LeakyReLU(alpha=0.2)(img)
+        return img
+        
+    
+    img = SpectralNormalization(Conv2D(filters=filters, kernel_size=1, strides=1, padding='same', kernel_initializer = init), dynamic=True)(img)
     img = LeakyReLU(alpha=0.2)(img)
     
-    img = Conv2D(filters=2*ndf, kernel_size=kw, strides=2, padding='same', kernel_initializer = init)(img)
-    img = BatchNormalization(axis=-1)(img)
+    img = down_block(img, filters, kernel_size=3)
+    img = down_block(img, 2*filters, kernel_size=3)
+    img = down_block(img, 2*filters, kernel_size=3)
+    img = down_block(img, 4*filters, kernel_size=3)
+    img = down_block(img, 4*filters, kernel_size=3)
+    img = down_block(img, 8*filters, kernel_size=3)
+    
+    
+    
+    img = Conv2D(filters=8*filters, kernel_size=4, strides=1, padding='valid', kernel_initializer = init)(img)
     img = LeakyReLU(alpha=0.2)(img)
     
-    img = Conv2D(filters=4*ndf, kernel_size=kw, strides=2, padding='same', kernel_initializer = init)(img)
-    img = BatchNormalization(axis=-1)(img)
-    img = LeakyReLU(alpha=0.2)(img)
     
-    img = Conv2D(filters=8*ndf, kernel_size=kw, strides=2, padding='same', kernel_initializer = init)(img)
-    img = BatchNormalization(axis=-1)(img)
-    img = LeakyReLU(alpha=0.2)(img)
-    
-    img = Conv2D(filters=16*ndf, kernel_size=kw, strides=2, padding='same', kernel_initializer = init)(img)
-    img = BatchNormalization(axis=-1)(img)
-    img = LeakyReLU(alpha=0.2)(img)
-    
-    img = Conv2D(filters=1, kernel_size=kw, strides=1, padding='same', kernel_initializer = init)(img)
+    #img = Conv2D(filters=1, kernel_size=kw, strides=1, padding='same', kernel_initializer = init)(img)
+    img = Dense(1)(img)
     
     return img
 

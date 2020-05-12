@@ -91,5 +91,5 @@ def N_map(latent_shape, domain):
 #model=G_AB((256,256,3), (1,1,32))
 #print(model.summary())
 
-#model = D_A((256,256,3))
-#print(model.summary())
+model = D_A((256,256,3))
+print(model.summary())
