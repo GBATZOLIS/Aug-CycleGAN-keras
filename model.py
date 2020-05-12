@@ -245,7 +245,7 @@ class AugCycleGAN(object):
                 z_b_dash = z_b + 0.15*tf.random.normal((a.shape[0], self.latent_shape[-1]), dtype=tf.float32)
                 b_hat_dash = self.G_AB([a,z_b_dash], training=True)
                 pl_lengths_G_AB = tf.math.sqrt(tf.math.reduce_sum(tf.math.square(b_hat-b_hat_dash), axis=[1,2,3]))
-                ppl_loss_G_AB = tf.math.reduce_mean(tf.math.square(pl_lengths_G_AB - self.pl_mean_G_AB))
+                ppl_loss_G_AB = tf.math.sqrt(tf.math.reduce_mean(tf.math.square(pl_lengths_G_AB - self.pl_mean_G_AB)))
                 self.train_info['losses']['reg']['ppl_G_AB'].append(ppl_loss_G_AB)
             
             z_a_hat = self.E_A([a, b_hat], training=True)
@@ -277,6 +277,7 @@ class AugCycleGAN(object):
             cycle_A_Zb_loss = adv_gen_B + adv_gen_Za + rec_a_dist + rec_Zb
             
             if ppl:
+                print("------------------------------------")
                 print(cycle_A_Zb_loss)
                 print(ppl_loss_G_AB)
                 G_AB_loss = cycle_A_Zb_loss + ppl_loss_G_AB
@@ -322,7 +323,7 @@ class AugCycleGAN(object):
                 z_a_dash = z_a + 0.15*tf.random.normal((b.shape[0], self.latent_shape[-1]), dtype=tf.float32)
                 a_hat_dash = self.G_BA([b,z_a_dash], training=True)
                 pl_lengths_G_BA = tf.math.sqrt(tf.math.reduce_sum(tf.math.square(a_hat-a_hat_dash), axis=[1,2,3]))
-                ppl_loss_G_BA = tf.math.reduce_mean(tf.math.square(pl_lengths_G_BA - self.pl_mean_G_BA))
+                ppl_loss_G_BA = tf.math.sqrt(tf.math.reduce_mean(tf.math.square(pl_lengths_G_BA - self.pl_mean_G_BA)))
                 self.train_info['losses']['reg']['ppl_G_BA'].append(ppl_loss_G_BA)
             
             z_b_hat = self.E_B([a_hat, b], training=True)
