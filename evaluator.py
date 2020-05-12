@@ -251,7 +251,7 @@ class evaluator(object):
                     else:
                         ax.imshow(fake_imgs_B[j,i-1])
             
-            fig.savefig("progress/visual_results/Α2Β/A2B_%s.png" % str(training_point), bbox_inches='tight')
+            fig.savefig("progress/visual_results/A2B_%s.png" % str(training_point), bbox_inches='tight')
             plt.close("all")
             
             #-----------------------------------------------------------------------------
@@ -277,7 +277,7 @@ class evaluator(object):
                     else:
                         ax.imshow(fake_imgs_B[j,i-1])
             
-            fig.savefig("progress/visual_results/Β2Α/Β2Α_%s.png" % str(training_point), bbox_inches='tight')
+            fig.savefig("progress/visual_results/Β2Α_%s.png" % str(training_point), bbox_inches='tight')
             plt.close("all")
             
             

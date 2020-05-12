@@ -242,10 +242,10 @@ class AugCycleGAN(object):
             fake_b = self.D_B(b_hat, training=True)
             
             if ppl:
-                z_b_dash = z_b + 0.15*tf.random.normal((a.shape[0], self.latent_shape[-1]), dtype=tf.float32)
+                z_b_dash = z_b + 0.05*tf.random.normal((a.shape[0], self.latent_shape[-1]), dtype=tf.float32)
                 b_hat_dash = self.G_AB([a,z_b_dash], training=True)
-                pl_lengths_G_AB = tf.math.sqrt(tf.math.reduce_sum(tf.math.square(b_hat-b_hat_dash), axis=[1,2,3]))
-                ppl_loss_G_AB = tf.math.sqrt(tf.math.reduce_mean(tf.math.square(pl_lengths_G_AB - self.pl_mean_G_AB)))
+                pl_lengths_G_AB = tf.math.reduce_sum(tf.math.abs(b_hat-b_hat_dash), axis=[1,2,3])
+                ppl_loss_G_AB = tf.math.reduce_mean(tf.math.abs(pl_lengths_G_AB - self.pl_mean_G_AB))
                 self.train_info['losses']['reg']['ppl_G_AB'].append(ppl_loss_G_AB)
             
             z_a_hat = self.E_A([a, b_hat], training=True)
@@ -281,12 +281,11 @@ class AugCycleGAN(object):
                 print(cycle_A_Zb_loss)
                 print(ppl_loss_G_AB)
                 G_AB_loss = cycle_A_Zb_loss + ppl_loss_G_AB
-                print(G_AB_loss)
                 #do the exponential moving average update step for the mean ppl
                 if self.pl_mean_G_AB==0.:
                     self.pl_mean_G_AB = tf.math.reduce_mean(pl_lengths_G_AB)
                 else:
-                    self.pl_mean_G_AB = 0.999*self.pl_mean_G_AB + 0.001*tf.math.reduce_mean(pl_lengths_G_AB)
+                    self.pl_mean_G_AB = 0.99*self.pl_mean_G_AB + 0.01*tf.math.reduce_mean(pl_lengths_G_AB)
             else:
                 G_AB_loss = cycle_A_Zb_loss
 
@@ -320,10 +319,10 @@ class AugCycleGAN(object):
             fake_a = self.D_A(a_hat, training=True)
             
             if ppl:
-                z_a_dash = z_a + 0.15*tf.random.normal((b.shape[0], self.latent_shape[-1]), dtype=tf.float32)
+                z_a_dash = z_a + 0.05*tf.random.normal((b.shape[0], self.latent_shape[-1]), dtype=tf.float32)
                 a_hat_dash = self.G_BA([b,z_a_dash], training=True)
-                pl_lengths_G_BA = tf.math.sqrt(tf.math.reduce_sum(tf.math.square(a_hat-a_hat_dash), axis=[1,2,3]))
-                ppl_loss_G_BA = tf.math.sqrt(tf.math.reduce_mean(tf.math.square(pl_lengths_G_BA - self.pl_mean_G_BA)))
+                pl_lengths_G_BA = tf.math.reduce_sum(tf.math.abs(a_hat-a_hat_dash), axis=[1,2,3])
+                ppl_loss_G_BA = tf.math.reduce_mean(tf.math.abs(pl_lengths_G_BA - self.pl_mean_G_BA))
                 self.train_info['losses']['reg']['ppl_G_BA'].append(ppl_loss_G_BA)
             
             z_b_hat = self.E_B([a_hat, b], training=True)
@@ -361,7 +360,7 @@ class AugCycleGAN(object):
                 if self.pl_mean_G_BA==0.:
                     self.pl_mean_G_BA = tf.math.reduce_mean(pl_lengths_G_BA)
                 else:
-                    self.pl_mean_G_BA = 0.999*self.pl_mean_G_BA + 0.001*tf.math.reduce_mean(pl_lengths_G_BA)
+                    self.pl_mean_G_BA = 0.99*self.pl_mean_G_BA + 0.01*tf.math.reduce_mean(pl_lengths_G_BA)
             else:
                 G_BA_loss = cycle_B_Za_loss
             
@@ -501,7 +500,7 @@ class AugCycleGAN(object):
                     z_a = tf.random.normal((batch_size, self.latent_shape[-1]), dtype=tf.float32)
                     z_b = tf.random.normal((batch_size, self.latent_shape[-1]), dtype=tf.float32)
                     
-                    if batch % 16 == 0:
+                    if batch % 16 == 3:
                         ppl=True
                     else:
                         ppl=False
@@ -516,7 +515,7 @@ class AugCycleGAN(object):
                         self.EMA() #update the inference model with exponential moving average
 
                     #generate the noise vectors from the N(0,sigma^2) distribution
-                    if batch % 50 == 0 and not(batch==0 and epoch==0):
+                    if batch % 25 == 0 and not(batch==0 and epoch==0):
                         elapsed_time = chop_microseconds(datetime.datetime.now() - start_time)
                         print('[%d/%d][%d/%d]-[%s:%.3f %s:%.3f %s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f %s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f %s:%.3f %s:%.3f]-[time:%s]'
                               % (epoch, epochs, batch, self.data_loader.n_batches,
@@ -534,7 +533,7 @@ class AugCycleGAN(object):
                                  'Rec_Zb', self.train_info['losses']['unsup']['rec_Zb'][-1],
                                  elapsed_time))
     
-                    if batch % 100 == 0 and not(batch==0 and epoch==0):
+                    if batch % 50 == 0 and not(batch==0 and epoch==0):
                         training_point = np.around(epoch+batch/self.data_loader.n_batches, 4)
                         self.train_info['performance']['eval_points'].append(training_point)
                         
