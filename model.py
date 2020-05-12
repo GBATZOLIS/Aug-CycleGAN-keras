@@ -500,10 +500,13 @@ class AugCycleGAN(object):
                     z_a = tf.random.normal((batch_size, self.latent_shape[-1]), dtype=tf.float32)
                     z_b = tf.random.normal((batch_size, self.latent_shape[-1]), dtype=tf.float32)
                     
-                    if batch % 16 == 3:
+                    """
+                    if batch % 20 == 3:
                         ppl=True
                     else:
                         ppl=False
+                    """
+                    ppl=False
                         
                     D_B_loss, D_Za_loss, cycle_A_Zb_loss = self.step_cycle_A(img_A, img_B, z_a, z_b, ppl)
                     D_A_loss, D_Zb_loss, cycle_B_Za_loss = self.step_cycle_B(img_A, img_B, z_a, z_b, ppl)
