@@ -275,26 +275,26 @@ class AugCycleGAN(object):
             self.train_info['losses']['unsup']['rec_Zb'].append(rec_Zb)
             
             cycle_A_Zb_loss = adv_gen_B + adv_gen_Za + rec_a_dist + rec_Zb
+            
+            if ppl:
+                print(cycle_A_Zb_loss)
+                print(ppl_loss_G_AB)
+                G_AB_loss = cycle_A_Zb_loss + ppl_loss_G_AB
+                print(G_AB_loss)
+                #do the exponential moving average update step for the mean ppl
+                if self.pl_mean_G_AB==0.:
+                    self.pl_mean_G_AB = tf.math.reduce_mean(pl_lengths_G_AB)
+                else:
+                    self.pl_mean_G_AB = 0.999*self.pl_mean_G_AB + 0.001*tf.math.reduce_mean(pl_lengths_G_AB)
+            else:
+                G_AB_loss = cycle_A_Zb_loss
 
         D_B_grads = tape.gradient(D_B_loss, self.D_B.trainable_variables)
         self.D_B_opt.apply_gradients(zip(D_B_grads, self.D_B.trainable_variables))
                 
         D_Za_grads = tape.gradient(D_Za_loss, self.D_Za.trainable_variables)
         self.D_Za_opt.apply_gradients(zip(D_Za_grads, self.D_Za.trainable_variables))
-           
-        if ppl:
-            print(cycle_A_Zb_loss)
-            print(ppl_loss_G_AB)
-            G_AB_loss = cycle_A_Zb_loss + ppl_loss_G_AB
-            
-            #do the exponential moving average update step for the mean ppl
-            if self.pl_mean_G_AB==0.:
-                self.pl_mean_G_AB = tf.math.reduce_mean(pl_lengths_G_AB)
-            else:
-                self.pl_mean_G_AB = 0.999*self.pl_mean_G_AB + 0.001*tf.math.reduce_mean(pl_lengths_G_AB)
-        else:
-            G_AB_loss = cycle_A_Zb_loss
-            
+ 
         G_AB_grads = tape.gradient(G_AB_loss, self.G_AB.trainable_variables)
         self.G_AB_opt.apply_gradients(zip(G_AB_grads, self.G_AB.trainable_variables))
 
@@ -353,6 +353,17 @@ class AugCycleGAN(object):
             
             cycle_B_Za_loss = adv_gen_A + adv_gen_Zb + rec_b_dist + rec_Za
             
+            if ppl:
+                G_BA_loss = cycle_B_Za_loss + ppl_loss_G_BA
+                
+                #update step
+                if self.pl_mean_G_BA==0.:
+                    self.pl_mean_G_BA = tf.math.reduce_mean(pl_lengths_G_BA)
+                else:
+                    self.pl_mean_G_BA = 0.999*self.pl_mean_G_BA + 0.001*tf.math.reduce_mean(pl_lengths_G_BA)
+            else:
+                G_BA_loss = cycle_B_Za_loss
+            
 
         D_A_grads = tape.gradient(D_A_loss, self.D_A.trainable_variables)
         self.D_A_opt.apply_gradients(zip(D_A_grads, self.D_A.trainable_variables))
@@ -365,18 +376,7 @@ class AugCycleGAN(object):
 
         E_A_grads = tape.gradient(cycle_B_Za_loss, self.E_A.trainable_variables)
         self.E_A_opt.apply_gradients(zip(E_A_grads, self.E_A.trainable_variables))
-        
-        if ppl:
-            G_BA_loss = cycle_B_Za_loss + ppl_loss_G_BA
-            
-            #update step
-            if self.pl_mean_G_BA==0.:
-                self.pl_mean_G_BA = tf.math.reduce_mean(pl_lengths_G_BA)
-            else:
-                self.pl_mean_G_BA = 0.999*self.pl_mean_G_BA + 0.001*tf.math.reduce_mean(pl_lengths_G_BA)
-        else:
-            G_BA_loss = cycle_B_Za_loss
-            
+
 		#Update G_BA and E_B only based on cycle starting from B
         G_BA_grads = tape.gradient(G_BA_loss, self.G_BA.trainable_variables)
         self.G_BA_opt.apply_gradients(zip(G_BA_grads, self.G_BA.trainable_variables))
