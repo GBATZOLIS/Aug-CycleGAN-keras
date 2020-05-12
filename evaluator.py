@@ -255,14 +255,14 @@ class evaluator(object):
             plt.close("all")
             
             #-----------------------------------------------------------------------------
-            img_A = self.data_loader.load_data(batch_size=batch_size, dataset='test', domain='Β')
+            img_A = self.data_loader.load_data(batch_size=batch_size, dataset='test', domain='B')
             
             fake_imgs_B = np.zeros((batch_size, num_out_imgs)+self.img_shape)
             for j in range(batch_size):
                 fake_B = np.zeros((num_out_imgs,)+self.img_shape)
                 for i in range(num_out_imgs):
                     z_b = np.random.randn(1, self.latent_shape[-1])
-                    fake_B[i] = self.G_ΒΑ.predict([np.expand_dims(img_A[j],axis=0), z_b])
+                    fake_B[i] = self.G_BA.predict([np.expand_dims(img_A[j],axis=0), z_b])
                 
                 fake_imgs_B[j] = fake_B
             
