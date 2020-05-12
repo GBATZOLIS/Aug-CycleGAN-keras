@@ -251,8 +251,35 @@ class evaluator(object):
                     else:
                         ax.imshow(fake_imgs_B[j,i-1])
             
-            fig.savefig("progress/visual_results/A2B_%s.png" % str(training_point), bbox_inches='tight')
+            fig.savefig("progress/visual_results/Α2Β/A2B_%s.png" % str(training_point), bbox_inches='tight')
             plt.close("all")
+            
+            #-----------------------------------------------------------------------------
+            img_A = self.data_loader.load_data(batch_size=batch_size, dataset='test', domain='Β')
+            
+            fake_imgs_B = np.zeros((batch_size, num_out_imgs)+self.img_shape)
+            for j in range(batch_size):
+                fake_B = np.zeros((num_out_imgs,)+self.img_shape)
+                for i in range(num_out_imgs):
+                    z_b = np.random.randn(1, self.latent_shape[-1])
+                    fake_B[i] = self.G_ΒΑ.predict([np.expand_dims(img_A[j],axis=0), z_b])
+                
+                fake_imgs_B[j] = fake_B
+            
+            
+            fig, axs = plt.subplots(batch_size, num_out_imgs+1, figsize=(21,15))
+            
+            for j in range(batch_size):
+                for i in range(num_out_imgs+1):
+                    ax = axs[j,i]
+                    if i == 0:
+                        ax.imshow(img_A[j])
+                    else:
+                        ax.imshow(fake_imgs_B[j,i-1])
+            
+            fig.savefig("progress/visual_results/Β2Α/Β2Α_%s.png" % str(training_point), bbox_inches='tight')
+            plt.close("all")
+            
             
             print('Visual results have been generated')
         
