@@ -341,12 +341,13 @@ def img_domain_critic(img, filters=64):
     init = RandomNormal(stddev=0.02)
     
     def down_block(img, filters, kernel_size=3):
-        img = SpectralNormalization(Conv2D(filters=filters, kernel_size=kernel_size, strides=2, padding='same', kernel_initializer = init), dynamic=True)(img)
+        img = Conv2D(filters=filters, kernel_size=kernel_size, strides=2, padding='same', kernel_initializer = init)(img)
+        img = BatchNormalization(axis=-1)(img)
         img = LeakyReLU(alpha=0.2)(img)
         return img
         
     
-    img = SpectralNormalization(Conv2D(filters=filters, kernel_size=1, strides=1, padding='same', kernel_initializer = init), dynamic=True)(img)
+    img = Conv2D(filters=filters, kernel_size=1, strides=1, padding='same', kernel_initializer = init)(img)
     img = LeakyReLU(alpha=0.2)(img)
     
     img = down_block(img, filters, kernel_size=3)

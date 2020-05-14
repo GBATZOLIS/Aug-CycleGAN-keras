@@ -91,16 +91,16 @@ def mod_res_block(image, style, dim_in, dim_out, w_hpf=0, upsample=False):
     return out
 
 def generator(image, style):
-    bf=32
+    bf=16
     out = Conv2D(filters=bf, kernel_size = 1, padding='same', kernel_initializer=he_uniform())(image)
     #-----------------------------------------------------------------------------------
-    out = res_block(out, dim_in = bf, dim_out = 2*bf, normalize=True, downsample=True)
-    out = res_block(out, dim_in = 2*bf, dim_out = 4*bf, normalize=True, downsample=True)
-    out = res_block(out, dim_in = 4*bf, dim_out = 8*bf, normalize=True, downsample=True)
-    out = res_block(out, dim_in = 8*bf, dim_out = 8*bf, normalize=True, downsample=True)
+    out = res_block(out, dim_in = bf, dim_out = 2*bf, normalize=False, downsample=True)
+    out = res_block(out, dim_in = 2*bf, dim_out = 4*bf, normalize=False, downsample=True)
+    out = res_block(out, dim_in = 4*bf, dim_out = 8*bf, normalize=False, downsample=True)
+    out = res_block(out, dim_in = 8*bf, dim_out = 8*bf, normalize=False, downsample=True)
     #---------------------------------------------------------------------------------
-    out = res_block(out, dim_in = 8*bf, dim_out = 8*bf, normalize=True, downsample=False)
-    out = res_block(out, dim_in = 8*bf, dim_out = 8*bf, normalize=True, downsample=False)
+    out = res_block(out, dim_in = 8*bf, dim_out = 8*bf, normalize=False, downsample=False)
+    out = res_block(out, dim_in = 8*bf, dim_out = 8*bf, normalize=False, downsample=False)
     out = mod_res_block(out, style, dim_in=8*bf, dim_out=8*bf, upsample=False)
     out = mod_res_block(out, style, dim_in=8*bf, dim_out=8*bf, upsample=False)
     #----------------------------------------------------------------------------------
@@ -118,15 +118,15 @@ def encoder(image, dim_out, domains=1):
     #For the encoder: use dim_out = latent_size
     #For the discriminator: use dim_out = 1
     
-    bf=32
+    bf=16
     out = Conv2D(filters=bf, kernel_size = 1, padding='same', kernel_initializer=he_uniform())(image)
     #------------------------------------------------------------------------------------------------
-    out = res_block(out, dim_in=bf, dim_out=2*bf, normalize=False, downsample=True)
-    out = res_block(out, dim_in=2*bf, dim_out=4*bf, normalize=False, downsample=True)
-    out = res_block(out, dim_in=4*bf, dim_out=8*bf, normalize=False, downsample=True)
-    out = res_block(out, dim_in=8*bf, dim_out=8*bf, normalize=False, downsample=True)
-    out = res_block(out, dim_in=8*bf, dim_out=8*bf, normalize=False, downsample=True)
-    out = res_block(out, dim_in=8*bf, dim_out=8*bf, normalize=False, downsample=True)
+    out = res_block(out, dim_in=bf, dim_out=2*bf, normalize=True, downsample=True)
+    out = res_block(out, dim_in=2*bf, dim_out=4*bf, normalize=True, downsample=True)
+    out = res_block(out, dim_in=4*bf, dim_out=8*bf, normalize=True, downsample=True)
+    out = res_block(out, dim_in=8*bf, dim_out=8*bf, normalize=True, downsample=True)
+    out = res_block(out, dim_in=8*bf, dim_out=8*bf, normalize=True, downsample=True)
+    out = res_block(out, dim_in=8*bf, dim_out=8*bf, normalize=True, downsample=True)
     #--------------------------------------------------------------------------------------------
     out = LeakyReLU(0.2)(out)
     out = Conv2D(filters=8*bf, kernel_size=4, padding='valid', kernel_initializer=he_uniform())(out)
