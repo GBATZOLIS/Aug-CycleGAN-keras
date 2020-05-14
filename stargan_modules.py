@@ -105,10 +105,10 @@ def generator(image, style):
     out = mod_res_block(out, style, dim_in=8*bf, dim_out=8*bf, upsample=False)
     out = mod_res_block(out, style, dim_in=8*bf, dim_out=8*bf, upsample=False)
     #----------------------------------------------------------------------------------
-    out = mod_res_block(out, style, dim_in=8*bf, dim_out=8*bf, upsample=True)
-    out = mod_res_block(out, style, dim_in=8*bf, dim_out=4*bf, upsample=True)
-    out = mod_res_block(out, style, dim_in=4*bf, dim_out=2*bf, upsample=True)
-    out = mod_res_block(out, style, dim_in=2*bf, dim_out=bf, upsample=True)
+    out = mod_res_block(out, style, dim_in=8*bf, dim_out=8*bf, w_hpf=1, upsample=True)
+    out = mod_res_block(out, style, dim_in=8*bf, dim_out=4*bf, w_hpf=1, upsample=True)
+    out = mod_res_block(out, style, dim_in=4*bf, dim_out=2*bf, w_hpf=1, upsample=True)
+    out = mod_res_block(out, style, dim_in=2*bf, dim_out=bf, w_hpf=1, upsample=True)
     #--------------------------------------------------------------------------------
     out = Conv2D(filters=3, kernel_size=1, padding='same', kernel_initializer=he_uniform())(out)
     
