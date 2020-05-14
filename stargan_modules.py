@@ -72,11 +72,10 @@ def mod_res_block(image, style, dim_in, dim_out, w_hpf=0, upsample=False):
         return x
     
     def residual(x, s):
-        x = mod_conv_block(x, s, dim_out)
-        
         if upsample:
             x = UpSampling2D(size=(2, 2), interpolation='nearest')(x)
         
+        x = mod_conv_block(x, s, dim_out)
         x = mod_conv_block(x, s, dim_out)
         
         return x

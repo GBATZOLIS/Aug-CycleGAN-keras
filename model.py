@@ -508,8 +508,8 @@ class AugCycleGAN(object):
                     ppl=False
                         
                     D_B_loss, D_Za_loss, cycle_A_Zb_loss = self.step_cycle_A(img_A, img_B, z_a, z_b, ppl)
-                    #D_A_loss, D_Zb_loss, cycle_B_Za_loss = self.step_cycle_B(img_A, img_B, z_a, z_b, ppl)
-                    D_A_loss, D_Zb_loss, cycle_B_Za_loss = 0,0,0
+                    D_A_loss, D_Zb_loss, cycle_B_Za_loss = self.step_cycle_B(img_A, img_B, z_a, z_b, ppl)
+                    #D_A_loss, D_Zb_loss, cycle_B_Za_loss = 0,0,0
                     #sup_a, sup_b = self.supervised_step(sup_img_A, sup_img_B)
                     
                         
@@ -698,4 +698,4 @@ class AugCycleGAN(object):
             
             
 model = AugCycleGAN((256,256,3), (1,1,32), resume=False)
-model.train(epochs=100, batch_size = 8)
+model.train(epochs=100, batch_size = 5)
