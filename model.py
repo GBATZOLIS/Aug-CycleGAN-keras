@@ -59,22 +59,22 @@ class AugCycleGAN(object):
         
         self.train_info['losses']['unsup']={}
         #ADVERSARIAL LOSSES FOR DISCRIMINATORS
-        self.train_info['losses']['unsup']['D_A']=[]
-        self.train_info['losses']['unsup']['D_B']=[]
-        self.train_info['losses']['unsup']['D_Za']=[]
-        self.train_info['losses']['unsup']['D_Zb']=[]
+        self.train_info['losses']['unsup']['D_A']=[0]
+        self.train_info['losses']['unsup']['D_B']=[0]
+        self.train_info['losses']['unsup']['D_Za']=[0]
+        self.train_info['losses']['unsup']['D_Zb']=[0]
         #ADVERSARIAL LOSSES FOR GENERATORS
-        self.train_info['losses']['unsup']['G_A']=[]
-        self.train_info['losses']['unsup']['G_B']=[]
-        self.train_info['losses']['unsup']['E_A']=[]
-        self.train_info['losses']['unsup']['E_B']=[]
+        self.train_info['losses']['unsup']['G_A']=[0]
+        self.train_info['losses']['unsup']['G_B']=[0]
+        self.train_info['losses']['unsup']['E_A']=[0]
+        self.train_info['losses']['unsup']['E_B']=[0]
         #RECONSTRUCTIONS LOSSES
-        self.train_info['losses']['unsup']['rec_a_dist']=[]
-        self.train_info['losses']['unsup']['rec_a_perc']=[]
-        self.train_info['losses']['unsup']['rec_b_dist']=[]
-        self.train_info['losses']['unsup']['rec_b_perc']=[]
-        self.train_info['losses']['unsup']['rec_Za']=[]
-        self.train_info['losses']['unsup']['rec_Zb']=[]
+        self.train_info['losses']['unsup']['rec_a_dist']=[0]
+        self.train_info['losses']['unsup']['rec_a_perc']=[0]
+        self.train_info['losses']['unsup']['rec_b_dist']=[0]
+        self.train_info['losses']['unsup']['rec_b_perc']=[0]
+        self.train_info['losses']['unsup']['rec_Za']=[0]
+        self.train_info['losses']['unsup']['rec_Zb']=[0]
         #BLUR LOSSES (preserve low frequencies between mapped and initial image)
         self.train_info['losses']['unsup']['blur_ab']=[] #from domain A to domain B
         self.train_info['losses']['unsup']['blur_ba']=[] #from domain B to domain A
@@ -508,8 +508,8 @@ class AugCycleGAN(object):
                     ppl=False
                         
                     D_B_loss, D_Za_loss, cycle_A_Zb_loss = self.step_cycle_A(img_A, img_B, z_a, z_b, ppl)
-                    D_A_loss, D_Zb_loss, cycle_B_Za_loss = self.step_cycle_B(img_A, img_B, z_a, z_b, ppl)
-                    
+                    #D_A_loss, D_Zb_loss, cycle_B_Za_loss = self.step_cycle_B(img_A, img_B, z_a, z_b, ppl)
+                    D_A_loss, D_Zb_loss, cycle_B_Za_loss = 0,0,0
                     #sup_a, sup_b = self.supervised_step(sup_img_A, sup_img_B)
                     
                         
@@ -517,7 +517,7 @@ class AugCycleGAN(object):
                         self.EMA() #update the inference model with exponential moving average
 
                     #generate the noise vectors from the N(0,sigma^2) distribution
-                    if batch % 25 == 0 and not(batch==0 and epoch==0):
+                    if batch % 10 == 0 and not(batch==0 and epoch==0):
                         elapsed_time = chop_microseconds(datetime.datetime.now() - start_time)
                         print('[%d/%d][%d/%d]-[%s:%.3f %s:%.3f %s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f %s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f %s:%.3f %s:%.3f]-[time:%s]'
                               % (epoch, epochs, batch, self.data_loader.n_batches,
@@ -535,7 +535,7 @@ class AugCycleGAN(object):
                                  'Rec_Zb', self.train_info['losses']['unsup']['rec_Zb'][-1],
                                  elapsed_time))
     
-                    if batch % 50 == 0 and not(batch==0 and epoch==0):
+                    if batch % 200 == 0 and not(batch==0 and epoch==0):
                         training_point = np.around(epoch+batch/self.data_loader.n_batches, 4)
                         self.train_info['performance']['eval_points'].append(training_point)
                         
@@ -698,4 +698,4 @@ class AugCycleGAN(object):
             
             
 model = AugCycleGAN((256,256,3), (1,1,32), resume=False)
-model.train(epochs=100, batch_size = 10)
+model.train(epochs=100, batch_size = 8)
