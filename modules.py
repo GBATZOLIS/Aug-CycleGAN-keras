@@ -5,9 +5,8 @@ Created on Sat Feb 29 18:04:27 2020
 @author: Georgios
 """
 
-from tensorflow.keras.layers import add, Concatenate, ZeroPadding2D,AveragePooling2D, Reshape, Conv2D, Add, LeakyReLU, Activation, Input,DepthwiseConv2D, Dense, Lambda, BatchNormalization, Conv2DTranspose
+from tensorflow.keras.layers import add, Layer, Concatenate, ZeroPadding2D,AveragePooling2D, Reshape, Conv2D, Add, LeakyReLU, Activation, Input,DepthwiseConv2D, Dense, Lambda, BatchNormalization, Conv2DTranspose
 from tensorflow.keras.initializers import RandomNormal
-from tensorflow.keras.layers import Layer
 from tensorflow.keras.models import Model
 from tensorflow.python.keras.engine.network import Network
 from tensorflow.keras.optimizers import Adam
@@ -429,8 +428,4 @@ def blur(img_shape):
     model = Model(inputs = image, outputs = image_processed, name='blur')
     model.compile(loss='mse',  optimizer=Adam(lr=0.0002, beta_1=0.5))
     return model
-    
-    
-
-
     
