@@ -7,7 +7,7 @@ Created on Sat Feb 29 17:56:58 2020
 
 from tensorflow.keras.layers import Input, Concatenate, Reshape
 from tensorflow.keras.models import Model
-from modules import CINResnetGenerator, celeb_generator, Alternative_Encoder, LatentEncoder, styleGAN_disc, img_domain_critic, noise_domain_critic, noise_mapping_func
+from modules import CINResnetGenerator, Alternative_Encoder, LatentEncoder, styleGAN_disc, img_domain_critic, noise_domain_critic, noise_mapping_func
 from tensorflow.python.keras.engine.network import Network
 from stargan_modules import *
     
@@ -16,16 +16,18 @@ from stargan_modules import *
 def G_AB(img_shape, latent_shape):
     image = Input(img_shape)
     noise = Input((latent_shape[-1],))
+    output = CINResnetGenerator(image, noise, filters=16, nlatent=latent_shape[-1])
     #output = celeb_generator(image, noise, filters=16, nlatent=latent_shape[-1])
-    output = generator(image, noise)
+    #output = generator(image, noise)
     model = Model(inputs=[image, noise], outputs=output, name='GAB')
     return model
 
 def G_BA(img_shape, latent_shape):
     image = Input(img_shape)
     noise = Input((latent_shape[-1],))
+    output = CINResnetGenerator(image, noise, filters=16, nlatent=latent_shape[-1])
     #output = celeb_generator(image, noise, filters=16, nlatent=latent_shape[-1])
-    output = generator(image, noise)
+    #output = generator(image, noise)
     model = Model(inputs=[image, noise], outputs=output, name='GBA')
     return model
 
@@ -100,8 +102,8 @@ def N_map(latent_shape, domain):
     model = Model(inputs=n, outputs=w, name='NoiseMap_'+domain)
     return model
 
-model=G_AB((256,256,3), (1,1,32))
-print(model.summary())
+#model=G_AB((256,256,3), (1,1,32))
+#print(model.summary())
 
 #model = D_A((256,256,3))
 #print(model.summary())

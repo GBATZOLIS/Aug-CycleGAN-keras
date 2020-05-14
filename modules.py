@@ -5,8 +5,9 @@ Created on Sat Feb 29 18:04:27 2020
 @author: Georgios
 """
 
-from tensorflow.keras.layers import add, Layer, Concatenate, ZeroPadding2D,AveragePooling2D, Reshape, Conv2D, Add, LeakyReLU, Activation, Input,DepthwiseConv2D, Dense, Lambda, BatchNormalization, Conv2DTranspose
-from tensorflow.keras.initializers import RandomNormal, he_uniform
+from tensorflow.keras.layers import add, Concatenate, ZeroPadding2D,AveragePooling2D, Reshape, Conv2D, Add, LeakyReLU, Activation, Input,DepthwiseConv2D, Dense, Lambda, BatchNormalization, Conv2DTranspose
+from tensorflow.keras.initializers import RandomNormal
+from tensorflow.keras.layers import Layer
 from tensorflow.keras.models import Model
 from tensorflow.python.keras.engine.network import Network
 from tensorflow.keras.optimizers import Adam
@@ -82,7 +83,7 @@ def CINResnetGenerator(image, noise, filters, nlatent):
         image = LeakyReLU(alpha=0.2)(image)
         return image
         
-    init = he_uniform()
+    init = RandomNormal(stddev=0.02)
     
     #noise = Reshape((nlatent,))(noise)
     image = Lambda(lambda x: 2*x - 1, output_shape=lambda x:x)(image)
@@ -111,84 +112,15 @@ def CINResnetGenerator(image, noise, filters, nlatent):
     
     R3_o = Add()([R3_i, R3_o])
     
-    for i in range(3):
+    for i in range(2):
         R3_o = g_block(R3_o, noise, 4*filters)
     
     R2_o = Conv2DTranspose(filters = 2*filters, kernel_size=3, strides=2, padding='same', kernel_initializer=init)(R3_o)
     R2_o = LeakyReLU(alpha=0.2)(R2_o)
     
     R2_o = Add()([R2_i, R2_o])
-    
-    for i in range(4):
-        R2_o = g_block(R2_o, noise, 2*filters)
-    
-    R1_o = Conv2DTranspose(filters = filters, kernel_size=3, strides=2, padding='same', kernel_initializer=init)(R2_o)
-    R1_o = LeakyReLU(alpha=0.2)(R1_o)
-    
-    R1_o = Add()([R1_i, R1_o])
-    
-    for i in range(5):
-        R1_o = g_block(R1_o, noise, filters)
-    
-    
-    out_image = Conv2D(filters = 3, kernel_size=7, padding='same', kernel_initializer = init)(R1_o) 
-    out_image = Activation('tanh')(out_image)
-    out_image = Lambda(lambda x: 0.5*x + 0.5, output_shape=lambda x:x)(out_image) 
-    
-    return out_image
-
-def celeb_generator(image, noise, filters, nlatent):
-    def g_block(image, noise, filters):
-        style = Dense(image.shape[-1], kernel_initializer = init)(noise)
-        image = Conv2DMod(filters = filters, kernel_size = 3, padding = 'same', kernel_initializer = init)([image, style])
-        image = LeakyReLU(alpha=0.2)(image)
-        return image
-        
-    init = he_uniform()
-    
-    image = Lambda(lambda x: 2*x - 1, output_shape=lambda x:x)(image)
-    
-    R1 = Conv2D(filters = filters, kernel_size=3, padding='same', kernel_initializer = init)(image)
-    R1_i = LeakyReLU(alpha=0.2)(R1)
-    
-    R2 = Conv2D(filters = 2*filters, kernel_size=3, strides=2, padding='same', kernel_initializer = init)(R1_i)
-    R2_i = LeakyReLU(alpha=0.2)(R2)
-    
-    R3 = Conv2D(filters = 4*filters, kernel_size=3, strides=2, padding='same', kernel_initializer = init)(R2_i)
-    R3_i = LeakyReLU(alpha=0.2)(R3)
-    
-    R4 = Conv2D(filters = 8*filters, kernel_size=3, strides=2, padding='same', kernel_initializer = init)(R3_i)
-    R4_i = LeakyReLU(alpha=0.2)(R4)
-    
-    R5 = Conv2D(filters = 16*filters, kernel_size=3, strides=2, padding='same', kernel_initializer = init)(R4_i)
-    R5_i = LeakyReLU(alpha=0.2)(R5)
-    
-    R5_o = R5_i
-    for i in range(1):
-        R5_o = g_block(R5_o, noise, 16*filters)
-        
-    R4_o = Conv2DTranspose(filters = 8*filters, kernel_size=3, strides=2, padding='same', kernel_initializer=init)(R5_o)
-    R4_o = LeakyReLU(alpha=0.2)(R4_o)
-    
-    R4_o = Add()([R4_i, R4_o])
     
     for i in range(2):
-        R4_o = g_block(R4_o, noise, 8*filters)
-    
-    R3_o = Conv2DTranspose(filters = 4*filters, kernel_size=3, strides=2, padding='same', kernel_initializer=init)(R4_o)
-    R3_o = LeakyReLU(alpha=0.2)(R3_o)
-    
-    R3_o = Add()([R3_i, R3_o])
-    
-    for i in range(3):
-        R3_o = g_block(R3_o, noise, 4*filters)
-    
-    R2_o = Conv2DTranspose(filters = 2*filters, kernel_size=3, strides=2, padding='same', kernel_initializer=init)(R3_o)
-    R2_o = LeakyReLU(alpha=0.2)(R2_o)
-    
-    R2_o = Add()([R2_i, R2_o])
-    
-    for i in range(4):
         R2_o = g_block(R2_o, noise, 2*filters)
     
     R1_o = Conv2DTranspose(filters = filters, kernel_size=3, strides=2, padding='same', kernel_initializer=init)(R2_o)
@@ -196,8 +128,8 @@ def celeb_generator(image, noise, filters, nlatent):
     
     R1_o = Add()([R1_i, R1_o])
     
-    for i in range(5):
-        R1_o = g_block(R1_o, noise, filters)
+    for i in range(2):
+        R1_o = g_block(R1_o, noise, 2*filters)
     
     
     out_image = Conv2D(filters = 3, kernel_size=7, padding='same', kernel_initializer = init)(R1_o) 
@@ -206,14 +138,13 @@ def celeb_generator(image, noise, filters, nlatent):
     
     return out_image
     
-
 #--------------------------------------------------------------------------------------------------------------------   
 
 
 """Modules for encoders: E_A and E_B"""
 
 def LatentEncoder(concat_A_B, nef, z_dim):
-    init = he_uniform()
+    init = RandomNormal(stddev=0.02)
     
     concat_A_B = Conv2D(filters=nef, kernel_size=3, strides=2, padding='same', kernel_initializer = init)(concat_A_B)
     concat_A_B = LeakyReLU(alpha=0.2)(concat_A_B)
@@ -251,19 +182,17 @@ def LatentEncoder(concat_A_B, nef, z_dim):
     encoding = Conv2D(filters=z_dim, kernel_size=1, strides=1, padding='valid', kernel_initializer = init)(concat_A_B)
     encoding = Reshape((encoding.shape[-1]*encoding.shape[-2]*encoding.shape[-3],))(encoding)
     
-    encoding = Dense(z_dim)(encoding)
-    
     return encoding
 
 def Alternative_Encoder(a, b, nlatent):
     def enc_block(nb, filters):
-        init = he_uniform()
+        init = RandomNormal(stddev=0.02)
         nb = Conv2D(filters=filters, kernel_size=3, strides=2, padding='same', kernel_initializer = init)(nb)
         nb = LeakyReLU(alpha=0.2)(nb)
         return nb
     
     def mod_enc_block(a, nb, filters):
-        init = he_uniform()
+        init = RandomNormal(stddev=0.02)
         inter_latent = Dense(a.shape[-1], kernel_initializer = init)(nb)
         a = Conv2DMod(filters=filters, kernel_size=3, strides=2, padding='same', kernel_initializer = init)([a, inter_latent])
         a = LeakyReLU(alpha=0.2)(a)
@@ -339,40 +268,9 @@ def styleGAN_disc(img, cha=16):
     out = Conv2D(filters=1, kernel_size=4, strides=1, padding='same', kernel_initializer = init)(x)
     return out
     
-def img_domain_critic(img, filters=32):
-    """
-    init = he_uniform()
-    
-    def down_block(img, filters, kernel_size=3):
-        img = Conv2D(filters=filters, kernel_size=kernel_size, strides=2, padding='same', kernel_initializer = init)(img)
-        img = BatchNormalization(axis=-1)(img)
-        img = LeakyReLU(alpha=0.2)(img)
-        return img
-        
-    
-    img = Conv2D(filters=filters, kernel_size=1, strides=1, padding='same', kernel_initializer = init)(img)
-    img = LeakyReLU(alpha=0.2)(img)
-    
-    img = down_block(img, filters, kernel_size=3)
-    img = down_block(img, 2*filters, kernel_size=3)
-    img = down_block(img, 2*filters, kernel_size=3)
-    img = down_block(img, 4*filters, kernel_size=3)
-    img = down_block(img, 4*filters, kernel_size=3)
-    img = down_block(img, 4*filters, kernel_size=3)
-    
-    
-    
-    img = Conv2D(filters=4*filters, kernel_size=4, strides=1, padding='valid', kernel_initializer = init)(img)
-    img = LeakyReLU(alpha=0.2)(img)
-    
-    
-    #img = Conv2D(filters=1, kernel_size=kw, strides=1, padding='same', kernel_initializer = init)(img)
-    img = Dense(1)(img)
-    
-    return img
-    """
+def img_domain_critic(img, ndf=32):
     init = RandomNormal(stddev=0.02)
-    ndf=filters
+    
     kw=4
     img = Conv2D(filters=ndf, kernel_size=kw, strides=2, padding='same', kernel_initializer = init)(img)
     img = LeakyReLU(alpha=0.2)(img)
@@ -397,9 +295,8 @@ def img_domain_critic(img, filters=32):
     
     return img
 
-
 def noise_domain_critic(noise, ndf=64):
-    init = he_uniform()
+    init = RandomNormal(stddev=0.02)
     
     noise = Dense(units = ndf, kernel_initializer=init)(noise)
     noise = BatchNormalization(axis = -1)(noise)
@@ -417,7 +314,7 @@ def noise_domain_critic(noise, ndf=64):
     return noise
 
 def noise_mapping_func(noise, nlatent):
-    init = he_uniform()
+    init = RandomNormal(stddev=0.02)
     
     noise = Reshape((nlatent,))(noise)
     
@@ -459,4 +356,8 @@ def blur(img_shape):
     model = Model(inputs = image, outputs = image_processed, name='blur')
     model.compile(loss='mse',  optimizer=Adam(lr=0.0002, beta_1=0.5))
     return model
+    
+    
+
+
     
