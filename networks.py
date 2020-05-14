@@ -35,7 +35,7 @@ def E_A(img_shape, latent_shape):
     
     #-----------------------------------------------------------------------
     concat_A_B = Concatenate(axis=-1)([imgA, imgB])
-    encoding = LatentEncoder(concat_A_B, nef=16, z_dim = latent_shape[-1])
+    encoding = LatentEncoder(concat_A_B, nef=32, z_dim = latent_shape[-1])
     #-----------------------------------------------------------------------
     
     #concat_A_B = Concatenate(axis=-1)([imgA, imgB])
@@ -54,7 +54,7 @@ def E_B(img_shape, latent_shape):
     
     #---------------------------------------------------------------------
     concat_A_B = Concatenate(axis=-1)([imgA, imgB])
-    encoding = LatentEncoder(concat_A_B, nef=16, z_dim = latent_shape[-1])
+    encoding = LatentEncoder(concat_A_B, nef=32, z_dim = latent_shape[-1])
     #--------------------------------------------------------------------
     #concat_B_A = Concatenate(axis=-1)([imgB, imgA])
     #encoding = Alternative_Encoder(imgB, imgA, latent_shape[-1])
@@ -103,5 +103,5 @@ def N_map(latent_shape, domain):
 #model=G_AB((256,256,3), (1,1,32))
 #print(model.summary())
 
-#model = D_A((256,256,3))
-#print(model.summary())
+model = D_A((256,256,3))
+print(model.summary())

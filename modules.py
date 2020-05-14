@@ -251,6 +251,8 @@ def LatentEncoder(concat_A_B, nef, z_dim):
     encoding = Conv2D(filters=z_dim, kernel_size=1, strides=1, padding='valid', kernel_initializer = init)(concat_A_B)
     encoding = Reshape((encoding.shape[-1]*encoding.shape[-2]*encoding.shape[-3],))(encoding)
     
+    encoding = Dense(z_dim)(encoding)
+    
     return encoding
 
 def Alternative_Encoder(a, b, nlatent):
@@ -355,11 +357,11 @@ def img_domain_critic(img, filters=64):
     img = down_block(img, 2*filters, kernel_size=3)
     img = down_block(img, 4*filters, kernel_size=3)
     img = down_block(img, 4*filters, kernel_size=3)
-    img = down_block(img, 8*filters, kernel_size=3)
+    img = down_block(img, 4*filters, kernel_size=3)
     
     
     
-    img = Conv2D(filters=8*filters, kernel_size=4, strides=1, padding='valid', kernel_initializer = init)(img)
+    img = Conv2D(filters=4*filters, kernel_size=4, strides=1, padding='valid', kernel_initializer = init)(img)
     img = LeakyReLU(alpha=0.2)(img)
     
     
