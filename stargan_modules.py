@@ -72,6 +72,8 @@ def mod_res_block(image, style, dim_in, dim_out, w_hpf=0, upsample=False):
         return x
     
     def residual(x, s):
+        x = mod_conv_block(x, s, dim_in)
+        
         if upsample:
             x = UpSampling2D(size=(2, 2), interpolation='nearest')(x)
         
@@ -104,9 +106,9 @@ def generator(image, style):
     out = mod_res_block(out, style, dim_in=8*bf, dim_out=8*bf, upsample=False)
     #----------------------------------------------------------------------------------
     out = mod_res_block(out, style, dim_in=8*bf, dim_out=8*bf, upsample=True)
-    out = mod_res_block(out, style, dim_in=8*bf, dim_out=8*bf, upsample=True)
-    out = mod_res_block(out, style, dim_in=8*bf, dim_out=8*bf, upsample=True)
-    out = mod_res_block(out, style, dim_in=8*bf, dim_out=8*bf, upsample=True)
+    out = mod_res_block(out, style, dim_in=8*bf, dim_out=4*bf, upsample=True)
+    out = mod_res_block(out, style, dim_in=4*bf, dim_out=2*bf, upsample=True)
+    out = mod_res_block(out, style, dim_in=2*bf, dim_out=bf, upsample=True)
     #--------------------------------------------------------------------------------
     out = Conv2D(filters=3, kernel_size=1, padding='same', kernel_initializer=he_uniform())(out)
     
