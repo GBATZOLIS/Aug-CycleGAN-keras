@@ -94,11 +94,17 @@ def CINResnetGenerator(image, noise, filters, nlatent):
     R1 = Conv2D(filters = filters, kernel_size=3, padding='same', kernel_initializer = init)(image)
     R1_i = LeakyReLU(alpha=0.2)(R1)
     
+    R1_i_long = g_block(R1_i, noise, filters) #new
+    
     R2 = Conv2D(filters = 2*filters, kernel_size=3, strides=2, padding='same', kernel_initializer = init)(R1_i)
     R2_i = LeakyReLU(alpha=0.2)(R2)
     
+    R2_i_long = g_block(R2_i, noise, 2*filters) #new
+    
     R3 = Conv2D(filters = 4*filters, kernel_size=3, strides=2, padding='same', kernel_initializer = init)(R2_i)
     R3_i = LeakyReLU(alpha=0.2)(R3)
+    
+    R3_i_long = g_block(R3_i, noise, 4*filters) #new
     
     R4 = Conv2D(filters = 8*filters, kernel_size=3, strides=2, padding='same', kernel_initializer = init)(R3_i)
     R4_i = LeakyReLU(alpha=0.2)(R4)
@@ -110,7 +116,8 @@ def CINResnetGenerator(image, noise, filters, nlatent):
     R3_o = Conv2DTranspose(filters = 4*filters, kernel_size=3, strides=2, padding='same', kernel_initializer=init)(R4_o)
     R3_o = LeakyReLU(alpha=0.2)(R3_o)
     
-    R3_o = Add()([R3_i, R3_o])
+    #R3_o = Add()([R3_i, R3_o])
+    R3_o = Add()([R3_i_long, R3_o]) #new
     
     for i in range(2):
         R3_o = g_block(R3_o, noise, 4*filters)
@@ -118,7 +125,8 @@ def CINResnetGenerator(image, noise, filters, nlatent):
     R2_o = Conv2DTranspose(filters = 2*filters, kernel_size=3, strides=2, padding='same', kernel_initializer=init)(R3_o)
     R2_o = LeakyReLU(alpha=0.2)(R2_o)
     
-    R2_o = Add()([R2_i, R2_o])
+    #R2_o = Add()([R2_i, R2_o])
+    R2_o = Add()([R2_i_long, R2_o]) #new
     
     for i in range(2):
         R2_o = g_block(R2_o, noise, 2*filters)
@@ -126,7 +134,8 @@ def CINResnetGenerator(image, noise, filters, nlatent):
     R1_o = Conv2DTranspose(filters = filters, kernel_size=3, strides=2, padding='same', kernel_initializer=init)(R2_o)
     R1_o = LeakyReLU(alpha=0.2)(R1_o)
     
-    R1_o = Add()([R1_i, R1_o])
+    #R1_o = Add()([R1_i, R1_o])
+    R1_o = Add()([R1_i_long, R1_o]) #new
     
     for i in range(2):
         R1_o = g_block(R1_o, noise, 2*filters)

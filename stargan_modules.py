@@ -61,7 +61,7 @@ def mod_res_block(image, style, dim_in, dim_out, w_hpf=0, upsample=False):
     
     def mod_conv_block(image, s, filters):
         init = RandomNormal(stddev=0.02)
-        style = Dense(image.shape[-1], kernel_initializer = he_uniform())(s)
+        style = Dense(image.shape[-1], kernel_initializer = init)(s)
         image = Conv2DMod(filters = filters, kernel_size = 3, padding = 'same', kernel_initializer = init)([image, style])
         image = LeakyReLU(alpha=0.2)(image)
         return image
