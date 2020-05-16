@@ -395,7 +395,7 @@ class AugCycleGAN(object):
             
             mode_seeking_loss_AB = -1*self.lpips.distance(b_hat, b_hat_dash)/(tf.norm(z_b - z_b_dash)+1e-8)
             self.train_info['losses']['reg']['ms_G_AB'].append(-1*mode_seeking_loss_AB)
-            
+            print(mode_seeking_loss_AB)
             #-----------------------------------------------
             z_a = tf.random.normal((b.shape[0], self.latent_shape[-1]), dtype=tf.float32)
             a_hat = self.G_BA([b,z_a], training=True)
@@ -405,6 +405,7 @@ class AugCycleGAN(object):
             
             mode_seeking_loss_BA = -1*self.lpips.distance(a_hat, a_hat_dash)/(tf.norm(z_a - z_a_dash)+1e-8)
             self.train_info['losses']['reg']['ms_G_BA'].append(-1*mode_seeking_loss_BA)
+            print(mode_seeking_loss_BA)
             
         #update the generator models G_AB and G_BA
         G_AB_grads = tape.gradient(mode_seeking_loss_AB, self.G_AB.trainable_variables)
@@ -500,19 +501,21 @@ class AugCycleGAN(object):
                     z_b = tf.random.normal((batch_size, self.latent_shape[-1]), dtype=tf.float32)
                     
                     
+                    """
                     if batch % 10 == 3:
                         ppl=True
                     else:
                         ppl=False
+                    """
                     
-                    
-                    #ppl=False
+                    ppl=False
                         
                     D_B_loss, D_Za_loss, cycle_A_Zb_loss = self.step_cycle_A(img_A, img_B, z_a, z_b, ppl)
                     D_A_loss, D_Zb_loss, cycle_B_Za_loss = self.step_cycle_B(img_A, img_B, z_a, z_b, ppl)
                     #D_A_loss, D_Zb_loss, cycle_B_Za_loss = 0,0,0
                     #sup_a, sup_b = self.supervised_step(sup_img_A, sup_img_B)
                     
+                    self.mode_seeking_regularisation(img_A, img_B)
                         
                     if batch % 10 == 0 and not(batch==0 and epoch==0):
                         self.EMA() #update the inference model with exponential moving average

@@ -123,9 +123,17 @@ def generator(image, style):
     out7 = add_block(out2, out7)
     out8 = mod_res_block(out7, style, dim_in=2*bf, dim_out=bf, w_hpf=1, upsample=True)
     #--------------------------------------------------------------------------------
-    out8 = mod_res_block(out8, style, dim_in=bf, dim_out=bf, w_hpf=1, upsample=False)
+    #out8 = mod_res_block(out8, style, dim_in=bf, dim_out=bf, w_hpf=0, upsample=False)
     
-    out = Conv2D(filters=3, kernel_size=1, padding='same', kernel_initializer=init)(out8)
+    out9 = add_block(out8, out1)
+    
+    out9 = mod_res_block(out9, style, dim_in=bf, dim_out=bf, w_hpf=0, upsample=False)
+    out9 = mod_res_block(out9, style, dim_in=bf, dim_out=bf, w_hpf=0, upsample=False)
+    out9 = mod_res_block(out9, style, dim_in=bf, dim_out=bf, w_hpf=0, upsample=False)
+    
+    
+    
+    out = Conv2D(filters=3, kernel_size=1, padding='same', kernel_initializer=init)(out9)
     
     return out
 
