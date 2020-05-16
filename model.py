@@ -285,7 +285,7 @@ class AugCycleGAN(object):
                 if self.pl_mean_G_AB==0.:
                     self.pl_mean_G_AB = tf.math.reduce_mean(pl_lengths_G_AB)
                 else:
-                    self.pl_mean_G_AB = 0.99*self.pl_mean_G_AB + 0.01*tf.math.reduce_mean(pl_lengths_G_AB)
+                    self.pl_mean_G_AB = 0.999*self.pl_mean_G_AB + 0.001*tf.math.reduce_mean(pl_lengths_G_AB)
             else:
                 G_AB_loss = cycle_A_Zb_loss
 
@@ -359,7 +359,7 @@ class AugCycleGAN(object):
                 if self.pl_mean_G_BA==0.:
                     self.pl_mean_G_BA = tf.math.reduce_mean(pl_lengths_G_BA)
                 else:
-                    self.pl_mean_G_BA = 0.99*self.pl_mean_G_BA + 0.01*tf.math.reduce_mean(pl_lengths_G_BA)
+                    self.pl_mean_G_BA = 0.999*self.pl_mean_G_BA + 0.001*tf.math.reduce_mean(pl_lengths_G_BA)
             else:
                 G_BA_loss = cycle_B_Za_loss
             
@@ -499,13 +499,14 @@ class AugCycleGAN(object):
                     z_a = tf.random.normal((batch_size, self.latent_shape[-1]), dtype=tf.float32)
                     z_b = tf.random.normal((batch_size, self.latent_shape[-1]), dtype=tf.float32)
                     
-                    """
-                    if batch % 20 == 3:
+                    
+                    if batch % 10 == 3:
                         ppl=True
                     else:
                         ppl=False
-                    """
-                    ppl=False
+                    
+                    
+                    #ppl=False
                         
                     D_B_loss, D_Za_loss, cycle_A_Zb_loss = self.step_cycle_A(img_A, img_B, z_a, z_b, ppl)
                     D_A_loss, D_Zb_loss, cycle_B_Za_loss = self.step_cycle_B(img_A, img_B, z_a, z_b, ppl)
