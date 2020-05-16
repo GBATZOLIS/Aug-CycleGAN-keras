@@ -20,7 +20,7 @@ Created on Wed Apr  1 02:45:22 2020
 #Load a trained model
 #make predictions
 
-from keras_networks import G_AB
+from networks import G_BA, G_AB
 import matplotlib.pyplot as plt
 import numpy as np
 from skimage.metrics import structural_similarity as ssim
@@ -51,32 +51,42 @@ def get_random_patch(img, patch_dimension):
         return img[x_index:x_index+patch_dimension[0], y_index:y_index+patch_dimension[1], :]
 
 
-img_shape = (800,800,3)
-latent_shape=(1,1,2)
+img_shape = (256,256,3)
+latent_shape=(32,)
 
-model_name = 'G_AB_61_300.h5'
+model_name = 'G_BA_18.h5'
 
 model = G_AB(img_shape=img_shape, latent_shape=latent_shape) #define model architecture
-model.load_weights("models/%s" % (model_name)) #load the saved weights
+model.load_weights(r"models/%s" % (model_name)) #load the saved weights
 
 #y_true = plt.imread('data/testA/38.jpg').astype(np.float)
 #y_true = y_true/255
 
-x_true = plt.imread('data/full_size_test_images/6.jpg').astype(np.float)
-x_true = get_random_patch(x_true, (800,800))
+path = 'data/tzikas.jpg'
+#x_true = plt.imread(path).astype(np.float)
+print("--------------------------------")
+#print(x_true.shape)
+#x_true = get_random_patch(x_true, (800,800))
+dim=256,256
+x_true = Image.open(path)
+
+x_true = x_true.resize((256,256))
+x_true = np.array(x_true)
+print("---------------------------------------------------------------------")
+print(x_true.shape)
 x_true = x_true/255
 x = np.expand_dims(x_true, axis=0)
 
 images=[]
-frames=100
+frames=50
 for _ in tqdm(range(frames)):
-    z=0.3*np.array(tf.random.normal((1,1,1,2), dtype=tf.float32))
+    z=0.3*np.array(tf.random.normal((1,32), dtype=tf.float32))
     out=model.predict([x,z])
     frame = Image.fromarray((np.concatenate((x_true, out[0]), axis=1) * 255).astype(np.uint8))
     images.append(frame)
 
 images[0].save('progress/image.gif',
-               save_all=True, append_images=images, optimize=False, duration=50, loop=0)
+               save_all=True, append_images=images, optimize=False, duration=50, loop=1)
 
 
 
