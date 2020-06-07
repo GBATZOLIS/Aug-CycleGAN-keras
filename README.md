@@ -14,7 +14,7 @@ Below you can see visual results. The image on the left is the low quality image
 ![Alt Text](https://github.com/GBATZOLIS/Aug-CycleGAN-keras/blob/master/progress/gif/PPL_only_gifs/1428.gif)
 ![Alt Text](https://github.com/GBATZOLIS/Aug-CycleGAN-keras/blob/master/progress/gif/PPL_only_gifs/1443.gif)
 
-The following gifs are relevant to the mixed regularisation protocol which I devised in order to control the diversity-quality trade-off. The mixed regularisation protocol is explained in my master thesis report. Sample visual results after the first stage of the training are shown below. The left image is the LQ image, the gif in the middle is random samples from the modelled conditional distribution P(HQ|LQ) and the image on the right is the ground truth HQ image. The enhanced images contain random color-shifts which are created by mode seeking regularisation.
+The following gifs are relevant to the mixed regularisation protocol which I devised in order to control the diversity-quality trade-off. The mixed regularisation protocol is explained in my master thesis report. Sample visual results after the first stage of the training are shown below. The left image is the LQ image, the gif in the middle contains random samples from the modelled conditional distribution P(HQ|LQ) and the image on the right is the ground truth HQ image. The enhanced images contain random color-shifts which are caused by mode seeking regularisation.
 
 ![Alt Text](https://github.com/GBATZOLIS/Aug-CycleGAN-keras/blob/master/progress/gif/Mixed_Gifs/168_opt.gif)
 ![Alt Text](https://github.com/GBATZOLIS/Aug-CycleGAN-keras/blob/master/progress/gif/Mixed_Gifs/220_opt.gif)
