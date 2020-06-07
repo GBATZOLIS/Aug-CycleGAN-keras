@@ -41,10 +41,10 @@ def E_A(img_shape, latent_shape):
     #-----------------------------------------------------------------------
     
     #concat_A_B = Concatenate(axis=-1)([imgA, imgB])
-    encoding = Alternative_Encoder(imgA, imgB, latent_shape[-1])
+    #encoding = Alternative_Encoder(imgA, imgB, latent_shape[-1])
     
-    #concat_A_B = Concatenate(axis=-1)([imgA, imgB])
-    #encoding = encoder(concat_A_B, latent_shape[-1])
+    concat_A_B = Concatenate(axis=-1)([imgA, imgB])
+    encoding = encoder(concat_A_B, latent_shape[-1])
     
     model = Model(inputs=[imgA, imgB], outputs=encoding, name='EA')
     
@@ -59,10 +59,10 @@ def E_B(img_shape, latent_shape):
     #encoding = LatentEncoder(concat_A_B, nef=32, z_dim = latent_shape[-1])
     #--------------------------------------------------------------------
     #concat_B_A = Concatenate(axis=-1)([imgB, imgA])
-    encoding = Alternative_Encoder(imgB, imgA, latent_shape[-1])
+    #encoding = Alternative_Encoder(imgB, imgA, latent_shape[-1])
     
-    #concat_B_A = Concatenate(axis=-1)([imgB, imgA])
-    #encoding = encoder(concat_B_A, latent_shape[-1])
+    concat_B_A = Concatenate(axis=-1)([imgB, imgA])
+    encoding = encoder(concat_B_A, latent_shape[-1])
     
     model = Model(inputs=[imgA, imgB], outputs=encoding, name='EB')
     
@@ -70,15 +70,15 @@ def E_B(img_shape, latent_shape):
 
 def D_A(img_shape):
     img=Input(img_shape)
-    result = img_domain_critic(img)
-    #result = encoder(img, dim_out=1)
+    #result = img_domain_critic(img)
+    result = encoder(img, dim_out=1)
     model = Model(inputs=img, outputs=result, name='DA')
     return model
 
 def D_B(img_shape):
     img=Input(img_shape)
-    result = img_domain_critic(img)
-    #result = encoder(img, dim_out=1)
+    #result = img_domain_critic(img)
+    result = encoder(img, dim_out=1)
     model = Model(inputs=img, outputs=result, name='DB')
     return model
 

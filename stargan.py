@@ -23,11 +23,14 @@ from evaluator import evaluator
 from tensorflow.keras.losses import mse
 import tensorflow as tf
 from lpips import lpips
+K = tf.keras.backend
 
 
 #visualisation packages
 import matplotlib.pyplot as plt
 
+
+from stargan_modules import *
 
   
 def discriminator_loss(real, generated):
@@ -51,40 +54,10 @@ class AugCycleGAN(object):
         
         #-----------------LOSSES------------------------
         self.train_info['losses'] = {}
-        self.train_info['losses']['sup']={}
-        self.train_info['losses']['sup']['dist_a']=[]
-        self.train_info['losses']['sup']['perc_a']=[]
-        self.train_info['losses']['sup']['dist_b']=[]
-        self.train_info['losses']['sup']['perc_b']=[]
-        
-        self.train_info['losses']['unsup']={}
-        #ADVERSARIAL LOSSES FOR DISCRIMINATORS
-        self.train_info['losses']['unsup']['D_A']=[]
-        self.train_info['losses']['unsup']['D_B']=[]
-        self.train_info['losses']['unsup']['D_Za']=[]
-        self.train_info['losses']['unsup']['D_Zb']=[]
-        #ADVERSARIAL LOSSES FOR GENERATORS
-        self.train_info['losses']['unsup']['G_A']=[]
-        self.train_info['losses']['unsup']['G_B']=[]
-        self.train_info['losses']['unsup']['E_A']=[]
-        self.train_info['losses']['unsup']['E_B']=[]
-        #RECONSTRUCTIONS LOSSES
-        self.train_info['losses']['unsup']['rec_a_dist']=[]
-        self.train_info['losses']['unsup']['rec_a_perc']=[]
-        self.train_info['losses']['unsup']['rec_b_dist']=[]
-        self.train_info['losses']['unsup']['rec_b_perc']=[]
-        self.train_info['losses']['unsup']['rec_Za']=[]
-        self.train_info['losses']['unsup']['rec_Zb']=[]
-        #BLUR LOSSES (preserve low frequencies between mapped and initial image)
-        self.train_info['losses']['unsup']['blur_ab']=[] #from domain A to domain B
-        self.train_info['losses']['unsup']['blur_ba']=[] #from domain B to domain A
-        
-        #regularisation losses
-        self.train_info['losses']['reg']={}
-        self.train_info['losses']['reg']['ppl_G_AB']=[]
-        self.train_info['losses']['reg']['ppl_G_BA']=[]
-        self.train_info['losses']['reg']['ms_G_AB']=[]
-        self.train_info['losses']['reg']['ms_G_BA']=[]
+        self.train_info['losses']['L_adv'] = []
+        self.train_info['losses']['L_sty'] = []
+        self.train_info['losses']['L_ds'] = []
+        self.train_info['losses']['L_cyc'] = []
         
         
         #-------------PERFORMANCE EVALUATION----------------------
@@ -122,58 +95,77 @@ class AugCycleGAN(object):
         #Exponential moving average parameters
         self.beta=0.99
         
+        #Weights of the losses of the objective
+        self.l_sty = 1
+        self.l_ds = 1
+        self.l_cyc = 1
+        
         #instantiate the LPIPS loss object
         self.lpips = lpips(self.img_shape)
         self.lpips.create_model()
         
-        self.G_AB = G_AB(img_shape, latent_shape)
-        self.G_BA = G_BA(img_shape, latent_shape)
-        self.E_A = E_A(img_shape, latent_shape)
-        self.E_B = E_B(img_shape, latent_shape)
-        self.D_A = D_A(img_shape)
-        self.D_B = D_B(img_shape)
-        self.D_Za = D_Za(latent_shape) 
-        self.D_Zb = D_Zb(latent_shape)
-        self.blurring = blur(img_shape)
+        self.G = generator()
+        self.E = encoder()
+        self.D = discriminator()
+        self.F = mapping_network() #F has two output branches reflecting the two different domains
             
         if resume==True:
-            self.G_AB.load_weights(glob('models/G_AB/*.h5')[-1])
-            self.G_BA.load_weights(glob('models/G_BA/*.h5')[-1])
-            self.E_A.load_weights(glob('models/E_A/*.h5')[-1])
-            self.E_B.load_weights(glob('models/E_B/*.h5')[-1])
-            self.D_A.load_weights(glob('models/D_A/*.h5')[-1])
-            self.D_B.load_weights(glob('models/D_B/*.h5')[-1])
-            self.D_Za.load_weights(glob('models/D_Za/*.h5')[-1])
-            self.D_Zb.load_weights(glob('models/D_Zb/*.h5')[-1])
+            self.G.load_weights(glob('models/G/*.h5')[-1])
+            self.E.load_weights(glob('models/E/*.h5')[-1])
+            self.D.load_weights(glob('models/D/*.h5')[-1])
+            self.F.load_weights(glob('models/F/*.h5')[-1])
         
-        #create the inference model with exponential moving average of the weights
-        self.G_AB_EMA = clone_model(self.G_AB)
-        self.G_AB_EMA.set_weights(self.G_AB.get_weights())
+        #For evaluation we use exponential moving average of all modules except D
+        self.G_EMA = clone_model(self.G)
+        self.G_EMA.set_weights(self.G.get_weights())
         #---------------------
-        self.G_BA_EMA = clone_model(self.G_BA)
-        self.G_BA_EMA.set_weights(self.G_BA.get_weights())
+        self.E_EMA = clone_model(self.E)
+        self.E_EMA.set_weights(self.E.get_weights())
         #--------------------------------------------------
+        self.F_EMA = clone_model(self.F)
+        self.F_EMA.set_weights(self.F.get_weights())
+        #------------------------------------------------------------------------------------
         
         
         #set the optimizers of all models
-        self.G_AB_opt = self.G_BA_opt = Adam(lr=0.0002, beta_1=0.5)
-        self.D_A_opt = self.D_B_opt = Adam(lr=0.0002, beta_1=0.5)
-        self.E_A_opt = self.E_B_opt = Adam(lr=0.0002, beta_1=0.5)
-        self.D_Za_opt = self.D_Zb_opt = Adam(lr=0.0002, beta_1=0.5)
-        
+        self.G_opt = self.E_opt = self.D_opt  = Adam(lr=10**(-4), beta_1=0, beta_2 = 0.99)
+        self.F_opt = Adam(lr=10**(-6), beta_1=0, beta_2 = 0.99)
     
+    def save_models(self,epoch):
+        
+        #save the models to intoduce resume capacity to training
+        self.G.save("models/G/G_{}.h5".format(epoch))
+        self.E.save("models/E/E_{}.h5".format(epoch))
+        self.F.save("models/F/F_{}.h5".format(epoch))
+        self.D.save("models/D/D_{}.h5".format(epoch))
+    
+    def delete_models(self, directories):
+        for directory in directories:
+            os.remove(directory)
+            
     def EMA(self,):
-        for i in range(len(self.G_AB.layers)):
-            up_weight = self.G_AB.layers[i].get_weights()
-            old_weight = self.G_AB_EMA.layers[i].get_weights()
+        #-------------------G--------------------------------
+        for i in range(len(self.G.layers)):
+            up_weight = self.G.layers[i].get_weights()
+            old_weight = self.G_EMA.layers[i].get_weights()
             new_weight = []
             for j in range(len(up_weight)):
                 new_weight.append(old_weight[j] * self.beta + (1-self.beta) * up_weight[j])
             self.G_AB_EMA.layers[i].set_weights(new_weight)
-            
-        for i in range(len(self.G_BA.layers)):
-            up_weight = self.G_BA.layers[i].get_weights()
-            old_weight = self.G_BA_EMA.layers[i].get_weights()
+          
+        #-------------------E--------------------------------
+        for i in range(len(self.E.layers)):
+            up_weight = self.E.layers[i].get_weights()
+            old_weight = self.E_EMA.layers[i].get_weights()
+            new_weight = []
+            for j in range(len(up_weight)):
+                new_weight.append(old_weight[j] * self.beta + (1-self.beta) * up_weight[j])
+            self.G_BA_EMA.layers[i].set_weights(new_weight)
+        
+        #-------------------F--------------------------------
+        for i in range(len(self.F.layers)):
+            up_weight = self.F.layers[i].get_weights()
+            old_weight = self.F_EMA.layers[i].get_weights()
             new_weight = []
             for j in range(len(up_weight)):
                 new_weight.append(old_weight[j] * self.beta + (1-self.beta) * up_weight[j])
@@ -181,305 +173,83 @@ class AugCycleGAN(object):
         
 
     def EMA_init(self,):
-        self.G_AB_EMA.set_weights(self.G_AB.get_weights())
-        self.G_BA_EMA.set_weights(self.G_BA.get_weights())
-
-        
-    def supervised_step(self, a, b):     
-        with tf.GradientTape(persistent=True) as tape:
-            z_a_hat = self.E_A([a,b], training=True)
-            fake_z_a = self.D_Za(z_a_hat, training=False) #used for the regularisation og the E_A encoder
-            a_hat = self.G_BA([b,z_a_hat], training=True)
-
-            #sup_perc_a = self.lpips.distance(a,a_hat)
-            #self.train_info['losses']['sup']['perc_a'].append(sup_perc_a)
-            
-            sup_dist_a = L1_loss(a,a_hat)
-            self.train_info['losses']['sup']['dist_a'].append(sup_dist_a)
-            
-            sup_loss_a = sup_dist_a
-            adv_gen_Za = gen_loss(fake_z_a)
-            E_A_loss = sup_loss_a + 0.5*adv_gen_Za
-            
-            #---------------------------------------------------------------
-            z_b_hat = self.E_B([a,b], training=True)
-            fake_z_b = self.D_Zb(z_b_hat, training=False)
-            b_hat = self.G_AB([a, z_b_hat], training=True)
-            
-            
-            #sup_perc_b = self.lpips.distance(b,b_hat)
-            #self.train_info['losses']['sup']['perc_b'].append(sup_perc_b)
-            
-            sup_dist_b = L1_loss(b,b_hat)
-            self.train_info['losses']['sup']['dist_b'].append(sup_dist_b)
-            
-            sup_loss_b = sup_dist_b
-            adv_gen_Zb = gen_loss(fake_z_b)
-            E_B_loss = sup_loss_b + 0.5*adv_gen_Zb
-        
-        #supervised loss a
-        G_BA_grads = tape.gradient(sup_loss_a, self.G_BA.trainable_variables)
-        self.G_BA_opt.apply_gradients(zip(G_BA_grads, self.G_BA.trainable_variables))
-        
-        E_A_grads = tape.gradient(E_A_loss, self.E_A.trainable_variables)
-        self.E_A_opt.apply_gradients(zip(E_A_grads, self.E_A.trainable_variables))
-        
-        #supervised loss b
-        G_AB_grads = tape.gradient(sup_loss_b, self.G_AB.trainable_variables)
-        self.G_AB_opt.apply_gradients(zip(G_AB_grads, self.G_AB.trainable_variables))
-        
-        E_B_grads = tape.gradient(E_B_loss, self.E_B.trainable_variables)
-        self.E_B_opt.apply_gradients(zip(E_B_grads, self.E_B.trainable_variables))
-        
-        return sup_loss_a, sup_loss_b
-                
+        self.G_EMA.set_weights(self.G.get_weights())
+        self.E_EMA.set_weights(self.E.get_weights())
+        self.F_EMA.set_weights(self.F.get_weights())
     
-    def step_cycle_A(self, a, b, z_a, z_b, ppl=False):
+    
+    def training_cycle(self, x, y):
+        def L_adv(D_true, D_fake):
+            output = tf.reduce_mean(tf.math.log(D_true)) + tf.reduce_mean(tf.math.log(1-D_fake))
+            return output
+        
+        def L_sty(s_curl, s_curl_rec):
+            output = tf.reduce_mean(tf.math.norm(s_curl - s_curl_rec, ord=1, axis=1))
+            return output
+        
+        def L_ds(x_curl, x_curl_2):
+            output = tf.reduce_sum(tf.math.norm(x_curl - x_curl_2, ord=1, axis=[1,2,3]))
+            return ouput
+        
+        def L_cyc(x, cycle_cons):
+            output = tf.reduce_mean(tf.math.norm(x - cycle_cons, ord=1, axis=[1,2,3]))
+        
+        z = tf.random.normal(shape = (x.shape[0], 16))
+        y_curl = tf.squeeze(tf.random.categorical(tf.math.log(0.5*np.ones((1,2))), 1)) 
+        y_curl = K.get_value(y_curl)
+        
+        z_2 = tf.random.normal(shape = (x.shape[0], 16))
         
         with tf.GradientTape(persistent=True) as tape:
-            #1st map
-            b_hat = self.G_AB([a, z_b], training=True)
-            fake_b = self.D_B(b_hat, training=True)
+            #Mappings
+            s_curl = self.F(z, training=True)[y_curl]
             
-            if ppl:
-                z_b_dash = z_b + 0.005*tf.random.normal((a.shape[0], self.latent_shape[-1]), dtype=tf.float32)
-                b_hat_dash = self.G_AB([a,z_b_dash], training=True)
-                pl_lengths_G_AB = tf.math.reduce_sum(tf.math.abs(b_hat-b_hat_dash), axis=[1,2,3])
-                ppl_loss_G_AB = tf.math.reduce_mean(tf.math.abs(pl_lengths_G_AB - self.pl_mean_G_AB))
-                self.train_info['losses']['reg']['ppl_G_AB'].append(ppl_loss_G_AB)
+            x_curl = self.G([x, s_curl], training=True) #main translation
             
-            z_a_hat = self.E_A([a, b_hat], training=True)
-            fake_z_a = self.D_Za(z_a_hat, training=True)
-    
-    	    #2nd map
-            a_cyc = self.G_BA([b_hat, z_a_hat], training=True)
-            z_b_cyc = self.E_B([a, b_hat], training=True)
+            D_true = self.D(x, training=True)[y] 
+            D_fake = self.D(x_curl, training=True)[y_curl]
+            
+            #for style reconstruction
+            s_curl_rec = self.E(x_curl, training=True)[y_curl] 
+            
+            #for style diversification
+            s_curl_2 = self.F(z_2, training=True)[y_curl] 
+            x_curl_2 = self.G([x, s_curl_2], training=True)
+            
+            #for preserving source characteristics (ID)
+            s_hat = self.E(x, training=True)[y]
+            cycle_cons = self.G([x_curl, s_hat], training=True)
+            
+            #Computation of losses
+            Ladv = L_adv(D_true, D_fake)
+            Lsty = L_sty(s_curl, s_curl_rec)
+            Lds = L_ds(x_curl, x_curl_2)
+            Lcyc = L_cyc(x, cycle_cons)
+            
+            objective = Ladv + self.l_sty*Lsty -1*self.l_ds*Lds + self.l_cyc*Lcyc
+            D_loss = -1*objective
+            GFE_loss = objective
         
-            #---------------COMPUTE LOSSES-----------------------
-            D_B_loss = discriminator_loss(self.D_B(b, training=True), fake_b)
-            self.train_info['losses']['unsup']['D_B'].append(D_B_loss)
-            
-            D_Za_loss = discriminator_loss(self.D_Za(z_a, training=True), fake_z_a)
-            self.train_info['losses']['unsup']['D_Za'].append(D_Za_loss)
-            
-            adv_gen_B = gen_loss(fake_b)
-            self.train_info['losses']['unsup']['G_B'].append(adv_gen_B)
-            
-            adv_gen_Za = gen_loss(fake_z_a)
-            self.train_info['losses']['unsup']['E_A'].append(adv_gen_Za)
-            
-            rec_a_dist = L1_loss(a_cyc,a)
-            self.train_info['losses']['unsup']['rec_a_dist'].append(rec_a_dist)
-            
-            rec_Zb = L1_loss(z_b_cyc,z_b)
-            self.train_info['losses']['unsup']['rec_Zb'].append(rec_Zb)
-            
-            cycle_A_Zb_loss = adv_gen_B + adv_gen_Za + rec_a_dist + rec_Zb
-            
-            if ppl:
-                #print("------------------------------------")
-                #print(cycle_A_Zb_loss)
-                #print(ppl_loss_G_AB)
-                G_AB_loss = cycle_A_Zb_loss + ppl_loss_G_AB
-                #do the exponential moving average update step for the mean ppl
-                if self.pl_mean_G_AB==0.:
-                    self.pl_mean_G_AB = tf.math.reduce_mean(pl_lengths_G_AB)
-                else:
-                    self.pl_mean_G_AB = 0.99*self.pl_mean_G_AB + 0.01*tf.math.reduce_mean(pl_lengths_G_AB)
-            else:
-                G_AB_loss = cycle_A_Zb_loss
-
-        D_B_grads = tape.gradient(D_B_loss, self.D_B.trainable_variables)
-        self.D_B_opt.apply_gradients(zip(D_B_grads, self.D_B.trainable_variables))
-                
-        D_Za_grads = tape.gradient(D_Za_loss, self.D_Za.trainable_variables)
-        self.D_Za_opt.apply_gradients(zip(D_Za_grads, self.D_Za.trainable_variables))
- 
-        G_AB_grads = tape.gradient(G_AB_loss, self.G_AB.trainable_variables)
-        self.G_AB_opt.apply_gradients(zip(G_AB_grads, self.G_AB.trainable_variables))
-
-        E_A_grads = tape.gradient(cycle_A_Zb_loss, self.E_A.trainable_variables)
-        self.E_A_opt.apply_gradients(zip(E_A_grads, self.E_A.trainable_variables))
-
-		#Update G_BA and E_B only based on cycle starting from B
-        G_BA_grads = tape.gradient(cycle_A_Zb_loss, self.G_BA.trainable_variables)
-        self.G_BA_opt.apply_gradients(zip(G_BA_grads, self.G_BA.trainable_variables))
-
-        E_B_grads = tape.gradient(cycle_A_Zb_loss, self.E_B.trainable_variables)
-        self.E_B_opt.apply_gradients(zip(E_B_grads, self.E_B.trainable_variables))
         
-        return D_B_loss, D_Za_loss, cycle_A_Zb_loss
-    
-    def step_cycle_B(self, a, b, z_a, z_b, ppl=False):
+        D_grads = tape.gradient(D_loss, self.D.trainable_variables)
+        self.D_opt.apply_gradients(zip(D_grads, self.D.trainable_variables))
         
-        with tf.GradientTape(persistent=True) as tape:
-            #1st map
-            a_hat = self.G_BA([b, z_a], training=True)
-            fake_a = self.D_A(a_hat, training=True)
-            
-            if ppl:
-                z_a_dash = z_a + 0.005*tf.random.normal((b.shape[0], self.latent_shape[-1]), dtype=tf.float32)
-                a_hat_dash = self.G_BA([b,z_a_dash], training=True)
-                pl_lengths_G_BA = tf.math.reduce_sum(tf.math.abs(a_hat-a_hat_dash), axis=[1,2,3])
-                ppl_loss_G_BA = tf.math.reduce_mean(tf.math.abs(pl_lengths_G_BA - self.pl_mean_G_BA))
-                self.train_info['losses']['reg']['ppl_G_BA'].append(ppl_loss_G_BA)
-            
-            z_b_hat = self.E_B([a_hat, b], training=True)
-            fake_z_b = self.D_Zb(z_b_hat, training=True)
-			
-			#2nd map
-            b_cyc = self.G_AB([a_hat, z_b_hat], training=True)
-            z_a_cyc = self.E_A([a_hat, b], training=True)
-            
-            #----------COMPUTE LOSSES-----------
-            D_A_loss = discriminator_loss(self.D_A(a, training=True), fake_a)
-            self.train_info['losses']['unsup']['D_A'].append(D_A_loss)
-            
-            D_Zb_loss = discriminator_loss(self.D_Zb(z_b, training=True), fake_z_b)
-            self.train_info['losses']['unsup']['D_Zb'].append(D_Zb_loss)
-            
-            adv_gen_A = gen_loss(fake_a)
-            self.train_info['losses']['unsup']['G_A'].append(adv_gen_A)
-            
-            adv_gen_Zb = gen_loss(fake_z_b)
-            self.train_info['losses']['unsup']['E_B'].append(adv_gen_Zb)
-            
-            rec_b_dist = L1_loss(b_cyc,b)
-            self.train_info['losses']['unsup']['rec_b_dist'].append(rec_b_dist)
-            
-            rec_Za = L1_loss(z_a_cyc,z_a)
-            self.train_info['losses']['unsup']['rec_Za'].append(rec_Za)
-            
-            cycle_B_Za_loss = adv_gen_A + adv_gen_Zb + rec_b_dist + rec_Za
-            
-            if ppl:
-                G_BA_loss = cycle_B_Za_loss + ppl_loss_G_BA
-                
-                #update step
-                if self.pl_mean_G_BA==0.:
-                    self.pl_mean_G_BA = tf.math.reduce_mean(pl_lengths_G_BA)
-                else:
-                    self.pl_mean_G_BA = 0.99*self.pl_mean_G_BA + 0.01*tf.math.reduce_mean(pl_lengths_G_BA)
-            else:
-                G_BA_loss = cycle_B_Za_loss
-            
-
-        D_A_grads = tape.gradient(D_A_loss, self.D_A.trainable_variables)
-        self.D_A_opt.apply_gradients(zip(D_A_grads, self.D_A.trainable_variables))
-                
-        D_Zb_grads = tape.gradient(D_Zb_loss, self.D_Zb.trainable_variables)
-        self.D_Zb_opt.apply_gradients(zip(D_Zb_grads, self.D_Zb.trainable_variables))
-                
-        G_AB_grads = tape.gradient(cycle_B_Za_loss, self.G_AB.trainable_variables)
-        self.G_AB_opt.apply_gradients(zip(G_AB_grads, self.G_AB.trainable_variables))
-
-        E_A_grads = tape.gradient(cycle_B_Za_loss, self.E_A.trainable_variables)
-        self.E_A_opt.apply_gradients(zip(E_A_grads, self.E_A.trainable_variables))
-
-		#Update G_BA and E_B only based on cycle starting from B
-        G_BA_grads = tape.gradient(G_BA_loss, self.G_BA.trainable_variables)
-        self.G_BA_opt.apply_gradients(zip(G_BA_grads, self.G_BA.trainable_variables))
-
-        E_B_grads = tape.gradient(cycle_B_Za_loss, self.E_B.trainable_variables)
-        self.E_B_opt.apply_gradients(zip(E_B_grads, self.E_B.trainable_variables))
+        G_grads = tape.gradient(GFE_loss, self.G.trainable_variables)
+        self.G_opt.apply_gradients(zip(G_grads, self.G.trainable_variables))
         
-        return D_A_loss, D_Zb_loss, cycle_B_Za_loss
-    
-    def mode_seeking_regularisation(self, a, b):
-        with tf.GradientTape(persistent=True) as tape:
-            z_b = tf.random.normal((a.shape[0], self.latent_shape[-1]), dtype=tf.float32)
-            b_hat = self.G_AB([a,z_b], training=True)
-                
-            z_b_dash = tf.random.normal((a.shape[0], self.latent_shape[-1]), dtype=tf.float32)
-            b_hat_dash = self.G_AB([a,z_b_dash], training=True)
-            
-            mode_seeking_loss_AB = -1*self.lpips.distance(b_hat, b_hat_dash)/(tf.norm(z_b - z_b_dash)+1e-8)
-            self.train_info['losses']['reg']['ms_G_AB'].append(-1*mode_seeking_loss_AB)
-            
-            #-----------------------------------------------
-            z_a = tf.random.normal((b.shape[0], self.latent_shape[-1]), dtype=tf.float32)
-            a_hat = self.G_BA([b,z_a], training=True)
-                
-            z_a_dash = tf.random.normal((b.shape[0], self.latent_shape[-1]), dtype=tf.float32)
-            a_hat_dash = self.G_BA([b,z_a_dash], training=True)
-            
-            mode_seeking_loss_BA = -1*self.lpips.distance(a_hat, a_hat_dash)/(tf.norm(z_a - z_a_dash)+1e-8)
-            self.train_info['losses']['reg']['ms_G_BA'].append(-1*mode_seeking_loss_BA)
-            
-        #update the generator models G_AB and G_BA
-        G_AB_grads = tape.gradient(mode_seeking_loss_AB, self.G_AB.trainable_variables)
-        self.G_AB_opt.apply_gradients(zip(G_AB_grads, self.G_AB.trainable_variables))
+        E_grads = tape.gradient(GFE_loss, self.E.trainable_variables)
+        self.E_opt.apply_gradients(zip(E_grads, self.E.trainable_variables))
         
-        G_BA_grads = tape.gradient(mode_seeking_loss_BA, self.G_BA.trainable_variables)
-        self.G_BA_opt.apply_gradients(zip(G_BA_grads, self.G_BA.trainable_variables))
-            
+        F_grads = tape.gradient(GFE_loss, self.F.trainable_variables)
+        self.F_opt.apply_gradients(zip(F_grads, self.F.trainable_variables))   
         
-    def ppl_regularisation(self, a, b):
-        #every M steps we regularise the perceptual path length
-        #we have 2 generators (G_AB, G_BA)
+        #Update the tensorboard values
+        self.train_info['losses']['L_adv'].append(Ladv)
+        self.train_info['losses']['L_sty'].append(Lsty)
+        self.train_info['losses']['L_ds'].append(Lds)
+        self.train_info['losses']['L_cyc'].append(Lcyc)
         
-        with tf.GradientTape(persistent=True) as tape:
-            z_b = tf.random.normal((a.shape[0], self.latent_shape[-1]), dtype=tf.float32)
-            b_hat = self.G_AB([a,z_b], training=True)
-            
-            z_b_dash = z_b + 0.1*tf.random.normal((a.shape[0], self.latent_shape[-1]), dtype=tf.float32)
-            b_hat_dash = self.G_AB([a,z_b_dash], training=True)
-            
-            pl_lengths_G_AB = tf.math.sqrt(tf.math.reduce_sum(tf.math.square(b_hat-b_hat_dash), axis=[1,2,3]))
-            
-            ppl_loss_G_AB = tf.math.reduce_mean(tf.math.square(pl_lengths_G_AB - self.pl_mean_G_AB))
-            self.train_info['losses']['reg']['ppl_G_AB'].append(ppl_loss_G_AB)
-            
-            
-            #---------------------------------------------------------------------------------------
-            z_a = tf.random.normal((b.shape[0], self.latent_shape[-1]), dtype=tf.float32)
-            a_hat = self.G_BA([b,z_a], training=True)
-            
-            z_a_dash = z_a + 0.1*tf.random.normal((b.shape[0], self.latent_shape[-1]), dtype=tf.float32)
-            a_hat_dash = self.G_BA([b,z_a_dash], training=True)
-            
-            pl_lengths_G_BA = tf.math.sqrt(tf.math.reduce_sum(tf.math.square(a_hat-a_hat_dash), axis=[1,2,3]))
-            
-            ppl_loss_G_BA = tf.math.reduce_mean(tf.math.square(pl_lengths_G_BA - self.pl_mean_G_BA))
-            self.train_info['losses']['reg']['ppl_G_BA'].append(ppl_loss_G_BA)
-            
-        
-        #update the generator models
-        ppl_G_AB_grads = tape.gradient(ppl_loss_G_AB, self.G_AB.trainable_variables)
-        self.G_AB_opt.apply_gradients(zip(ppl_G_AB_grads, self.G_AB.trainable_variables))
-        
-        ppl_G_BA_grads = tape.gradient(ppl_loss_G_BA, self.G_BA.trainable_variables)
-        self.G_BA_opt.apply_gradients(zip(ppl_G_BA_grads, self.G_BA.trainable_variables))
-            
-        
-        if self.pl_mean_G_AB==0.:
-            self.pl_mean_G_AB = tf.math.reduce_mean(pl_lengths_G_AB)
-        else:
-            self.pl_mean_G_AB = 0.999*self.pl_mean_G_AB + 0.001*tf.math.reduce_mean(pl_lengths_G_AB)
-            
-        if self.pl_mean_G_BA==0.:
-            self.pl_mean_G_BA = tf.math.reduce_mean(pl_lengths_G_BA)
-        else:
-            self.pl_mean_G_BA = 0.999*self.pl_mean_G_BA + 0.001*tf.math.reduce_mean(pl_lengths_G_BA)
-        
-
-    def save_models(self,epoch):
-        
-        #save the models to intoduce resume capacity to training
-        self.G_AB.save("models/G_AB/G_AB_{}.h5".format(epoch))
-        self.G_BA.save("models/G_BA/G_BA_{}.h5".format(epoch))
-        self.E_A.save("models/E_A/E_A_{}.h5".format(epoch))
-        self.E_B.save("models/E_B/E_B_{}.h5".format(epoch))
-        self.D_A.save("models/D_A/D_A_{}.h5".format(epoch))
-        self.D_B.save("models/D_B/D_B_{}.h5".format(epoch))
-        self.D_Za.save("models/D_Za/D_Za_{}.h5".format(epoch))
-        self.D_Zb.save("models/D_Zb/D_Zb_{}.h5".format(epoch))
-    
-    def delete_models(self,directories):
-        for directory in directories:
-            os.remove(directory)
-        
-    def train(self, epochs, batch_size=10, sample_interval=50):
+    def train(self, epochs, batch_size=10):
         start_time = datetime.datetime.now()
         def chop_microseconds(delta):
             #utility to help avoid printing the microseconds
@@ -488,168 +258,39 @@ class AugCycleGAN(object):
         try:
             #create a dynamic evaluator object
             dynamic_evaluator = evaluator(self.img_shape, self.latent_shape)
-            for epoch in range(epochs):
-                for batch, (img_A, img_B) in enumerate(self.data_loader.load_unpaired_batch(batch_size, portion = 1)):
-                    img_A = tf.convert_to_tensor(img_A, dtype=tf.float32)
-                    img_B = tf.convert_to_tensor(img_B, dtype=tf.float32)
+            
+            for it in iterations:
+                y = np.random.randint(2)
+                if y==0:
+                    x = self.data_loader.load_data(batch_size=batch_size, dataset='train', domain='A')
+                elif y==1:
+                    x = self.data_loader.load_data(batch_size=batch_size, dataset='train', domain='B')
+                else:
+                    Exception('Wrong encoding provideed for the domains')
+                
+                self.training_cycle(x,y)
+                
+                if it % 10 == 0:
+                    L_adv = self.train_info['losses']['L_adv'][-1]
+                    L_sty = self.train_info['losses']['L_sty'][-1]
+                    L_ds = self.train_info['losses']['L_ds'][-1]
+                    L_cyc = self.train_info['losses']['L_cyc'][-1]
                     
-                    #sup_img_A = tf.convert_to_tensor(sup_img_A, dtype=tf.float32)
-                    #sup_img_B = tf.convert_to_tensor(sup_img_B, dtype=tf.float32)
-                        
-                    z_a = tf.random.normal((batch_size, self.latent_shape[-1]), dtype=tf.float32)
-                    z_b = tf.random.normal((batch_size, self.latent_shape[-1]), dtype=tf.float32)
+                    report = '[%d/%d]  [%s:%.3f  %s:%.3f  %s:%.3f  %s:%.3f]' % (L_adv, L_sty, L_ds, L_cyc)
+                    print(report)
+                
+                """
+                if it % 200 = 100:
+                    #evaluation based on FID and LPIPS
+                    #I may need to introduce a measure which captures LPIPS between input and ouput
+                    #This metric will check whether the identity of the person remains the same
+                """
                     
-                    """
-                    if batch % 20 == 3:
-                        ppl=True
-                    else:
-                        ppl=False
-                    """
-                    ppl=False
-                        
-                    D_B_loss, D_Za_loss, cycle_A_Zb_loss = self.step_cycle_A(img_A, img_B, z_a, z_b, ppl)
-                    D_A_loss, D_Zb_loss, cycle_B_Za_loss = self.step_cycle_B(img_A, img_B, z_a, z_b, ppl)
-                    
-                    #sup_a, sup_b = self.supervised_step(sup_img_A, sup_img_B)
-                    
-                        
-                    if batch % 10 == 0 and not(batch==0 and epoch==0):
-                        self.EMA() #update the inference model with exponential moving average
 
-                    #generate the noise vectors from the N(0,sigma^2) distribution
-                    if batch % 25 == 0 and not(batch==0 and epoch==0):
-                        elapsed_time = chop_microseconds(datetime.datetime.now() - start_time)
-                        print('[%d/%d][%d/%d]-[%s:%.3f %s:%.3f %s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f %s:%.3f %s:%.3f]-[%s:%.3f %s:%.3f %s:%.3f %s:%.3f]-[time:%s]'
-                              % (epoch, epochs, batch, self.data_loader.n_batches,
-                                 'D_A', D_A_loss, 
-                                 'D_B', D_B_loss, 
-                                 'D_Za', D_Za_loss, 
-                                 'D_Zb', D_Zb_loss,
-                                 'Adv_A', self.train_info['losses']['unsup']['G_A'][-1] , 
-                                 'Adv_B', self.train_info['losses']['unsup']['G_B'][-1],
-                                 'Adv_Za', self.train_info['losses']['unsup']['E_A'][-1],
-                                 'Adv_Zb', self.train_info['losses']['unsup']['E_B'][-1],
-                                 'Rec_A', self.train_info['losses']['unsup']['rec_a_dist'][-1],
-                                 'Rec_B', self.train_info['losses']['unsup']['rec_b_dist'][-1],
-                                 'Rec_Za', self.train_info['losses']['unsup']['rec_Za'][-1],
-                                 'Rec_Zb', self.train_info['losses']['unsup']['rec_Zb'][-1],
-                                 elapsed_time))
-    
-                    if batch % 50 == 0 and not(batch==0 and epoch==0):
-                        training_point = np.around(epoch+batch/self.data_loader.n_batches, 4)
-                        self.train_info['performance']['eval_points'].append(training_point)
-                        
-                        #set the models
-                        dynamic_evaluator.G_AB = self.G_AB_EMA
-                        dynamic_evaluator.G_BA = self.G_BA_EMA
-                        
-                        #Perception and distortion evaluation
-                        
-                        #time_start=time.time()
-                        dynamic_evaluator.test(batch_size=5, num_out_imgs=5, training_point=training_point, test_type='visual')
-                        #mixed_duration = time.time()-time_start
-                        #print('Mixed Evaluation took %.3f seconds' % mixed_duration)
-                        
-                        """
-                        self.train_info['performance']['avg_min_lpips'][0].append(info['avg_min_lpips'])
-                        self.train_info['performance']['avg_mean_lpips'][0].append(info['avg_mean_lpips'])
-                        self.train_info['performance']['avg_max_lpips'][0].append(info['avg_max_lpips'])
-                        
-                        self.train_info['performance']['avg_min_ssim'][0].append(info['avg_min_ssim'])
-                        self.train_info['performance']['avg_mean_ssim'][0].append(info['avg_mean_ssim'])
-                        self.train_info['performance']['avg_max_ssim'][0].append(info['avg_max_ssim'])
-                        
-                        self.train_info['performance']['avg_min_div'][0].append(info['avg_min_div'])
-                        self.train_info['performance']['avg_mean_div'][0].append(info['avg_mean_div'])
-                        self.train_info['performance']['avg_max_div'][0].append(info['avg_max_div'])
-                        
-                        plt.figure(figsize=(21,15))
-                        plt.title('Diversity')
-                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_min_div'][0], label='min')
-                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_mean_div'][0], label='mean')
-                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_max_div'][0], label='max')
-                        plt.legend()
-                        plt.savefig('progress/diversity/diversity.png', bbox_inches='tight')
-                        
-                        plt.figure(figsize=(21,15))
-                        plt.title('SSIM')
-                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_min_ssim'][0], label='min')
-                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_mean_ssim'][0], label='mean')
-                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_max_ssim'][0], label='max')
-                        plt.legend()
-                        plt.savefig('progress/distortion/SSIM.png', bbox_inches='tight')
-                        
-                        
-                        plt.figure(figsize=(21,15))
-                        plt.title('LPIPS')
-                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_min_lpips'][0], label='min')
-                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_mean_lpips'][0], label='mean')
-                        plt.plot(self.train_info['performance']['eval_points'], self.train_info['performance']['avg_max_lpips'][0], label='max')
-                        plt.legend()
-                        plt.savefig('progress/perception/LPIPS.png', bbox_inches='tight')
-                        
-                        plt.close('all')
-                        """
-                        
-                        #save the generators
-                        self.G_AB_EMA.save("models/G_AB_all/G_AB_{}_{}.h5".format(epoch, batch))
-                        self.G_BA_EMA.save("models/G_BA_all/G_BA_{}_{}.h5".format(epoch, batch))
-                    
-                    if batch % 100 ==0 and epoch % 10==0:
-                        self.EMA_init() #restart the G_AB_EMA from the current state of the G_AB
-                
-                
-                """
-                dynamic_evaluator.model = self.G_AB_EMA #set the current G_AB_EMA model for evaluation
-                #Perception and distortion evaluation on the entire test dataset
-                info = dynamic_evaluator.test(batch_size=250, num_out_imgs=25, training_point=training_point, test_type='mixed')
-                
-                self.train_info['performance']['avg_min_lpips'][1].append(info['avg_min_lpips'])
-                self.train_info['performance']['avg_mean_lpips'][1].append(info['avg_mean_lpips'])
-                self.train_info['performance']['avg_max_lpips'][1].append(info['avg_max_lpips'])
-                
-                self.train_info['performance']['avg_min_ssim'][1].append(info['avg_min_ssim'])
-                self.train_info['performance']['avg_mean_ssim'][1].append(info['avg_mean_ssim'])
-                self.train_info['performance']['avg_max_ssim'][1].append(info['avg_max_ssim'])
-                
-                self.train_info['performance']['avg_min_div'][1].append(info['avg_min_div'])
-                self.train_info['performance']['avg_mean_div'][1].append(info['avg_mean_div'])
-                self.train_info['performance']['avg_max_div'][1].append(info['avg_max_div'])
-                
-                plt.figure(figsize=(21,15))
-                plt.title('Diversity')
-                plt.plot(self.train_info['performance']['avg_min_div'][1], label='min')
-                plt.plot(self.train_info['performance']['avg_mean_div'][1], label='mean')
-                plt.plot(self.train_info['performance']['avg_max_div'][1], label='max')
-                plt.legend()
-                plt.savefig('progress/diversity/diversity_epoch.png', bbox_inches='tight')
-                
-                plt.figure(figsize=(21,15))
-                plt.title('SSIM')
-                plt.plot(self.train_info['performance']['avg_min_ssim'][1], label='min')
-                plt.plot(self.train_info['performance']['avg_mean_ssim'][1], label='mean')
-                plt.plot(self.train_info['performance']['avg_max_ssim'][1], label='max')
-                plt.legend()
-                plt.savefig('progress/distortion/SSIM_epoch.png', bbox_inches='tight')
-                
-                
-                plt.figure(figsize=(21,15))
-                plt.title('LPIPS')
-                plt.plot(self.train_info['performance']['avg_min_lpips'][1], label='min')
-                plt.plot(self.train_info['performance']['avg_mean_lpips'][1], label='mean')
-                plt.plot(self.train_info['performance']['avg_max_lpips'][1], label='max')
-                plt.legend()
-                plt.savefig('progress/perception/LPIPS_epoch.png', bbox_inches='tight')
-                
-                plt.close('all')
-                """
-                
-                #save the models to intoduce resume capacity to training
-                self.save_models(epoch)
-                
-                #save the tensorboard values
-                with open('progress/training_information/'+ 'train_info' + '.pkl', 'wb') as f:
-                    pickle.dump(self.train_info, f, pickle.HIGHEST_PROTOCOL)
+
+
+
+
             
         except KeyboardInterrupt:
             print('Training has been terminated manually')

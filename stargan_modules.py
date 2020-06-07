@@ -19,8 +19,8 @@ def res_block(image, dim_in, dim_out, normalize=False, downsample=False):
     
     def shortcut(x):
         if learned_sc:
-            init = RandomNormal(stddev=0.02)
-            x = Conv2D(filters=dim_out, kernel_size = 1, padding='same', kernel_initializer=init)(x)
+            init = tf.keras.initializers.HeUniform()
+            x = Conv2D(filters=dim_out, kernel_size = 1, padding='same', use_bias=False, kernel_initializer=init)(x)
         
         if downsample:
             x = AveragePooling2D(pool_size = 2, padding='same')(x)
@@ -28,13 +28,13 @@ def res_block(image, dim_in, dim_out, normalize=False, downsample=False):
         return x
     
     def residual(x):
-        init = RandomNormal(stddev=0.02)
+        init = tf.keras.initializers.HeUniform()
         
         if normalize:
             x = InstanceNormalization(axis=-1)(x)
             
         x = LeakyReLU(alpha=0.2)(x)
-        x = Conv2D(filters=dim_in, kernel_size = 3, padding='same', kernel_initializer=init)(x)
+        x = Conv2D(filters=dim_in, kernel_size = 3, padding='same', use_bias=False, kernel_initializer=init)(x)
         
         if downsample:
             x = AveragePooling2D(pool_size = 2, padding='same')(x)
@@ -43,7 +43,7 @@ def res_block(image, dim_in, dim_out, normalize=False, downsample=False):
             x = InstanceNormalization(axis=-1)(x)
         
         x = LeakyReLU(alpha=0.2)(x)
-        x = Conv2D(filters=dim_out, kernel_size = 3, padding='same', kernel_initializer=init)(x)
+        x = Conv2D(filters=dim_out, kernel_size = 3, padding='same', use_bias=False, kernel_initializer=init)(x)
         
         return x
     
@@ -52,37 +52,52 @@ def res_block(image, dim_in, dim_out, normalize=False, downsample=False):
     
     res_img = Add()([x1,x2])
     
-    res_img = Lambda(lambda x: x/math.sqrt(2), output_shape=lambda x:x)(res_img)
+    res_img = Lambda(lambda x: x/math.sqrt(2), output_shape=lambda x:x)(res_img) #unit variance
     
     return res_img
 
-def mod_res_block(image, style, dim_in, dim_out, w_hpf=0, upsample=False):
-    learned_sc = dim_in != dim_out
+
+def AdaIN(image, style):
     
-    def mod_conv_block(image, s, filters):
-        init = RandomNormal(stddev=0.02)
-        style = Dense(image.shape[-1], kernel_initializer = init)(s)
-        image = Conv2DMod(filters = filters, kernel_size = 3, padding = 'same', kernel_initializer = init)([image, style])
-        image = LeakyReLU(alpha=0.2)(image)
-        return image
+    num_features = image.shape[-1]
+    
+    gamma = Dense(num_features)(style)
+    gamma = Reshape(shape=(gamma.shape[0], 1, 1, gamma.shape[1]))(gamma)
+    
+    beta = Dense(num_features)(style)
+    beta = Reshape(shape=(beta.shape[0], 1, 1, beta.shape[1]))(beta)
+    
+    image = AdaInstanceNormalization()([image, beta, gamma]) #scale is initialised at 1
+    
+    return image
+
+    
+def AdaResBlock(image, style, dim_in, dim_out, w_hpf=0, upsample=False):
+    learned_sc = dim_in != dim_out
     
     def shortcut(x):
         if upsample:
             x = UpSampling2D(size=(2, 2), interpolation='nearest')(x)
         
         if learned_sc:
-            init = RandomNormal(stddev=0.02)
-            x = Conv2D(filters=dim_out, kernel_size = 1, padding='same', kernel_initializer=init)(x)
+            init = tf.keras.initializers.HeUniform()
+            x = Conv2D(filters=dim_out, kernel_size = 1, padding='same', use_bias=False, kernel_initializer=init)(x)
         
         return x
     
     def residual(x, s):
-        x = mod_conv_block(x, s, dim_in)
+        init = tf.keras.initializers.HeUniform()
+        
+        x = AdaIN(x, s)
+        x = LeakyReLU(alpha=0.2)(x)
         
         if upsample:
             x = UpSampling2D(size=(2, 2), interpolation='nearest')(x)
         
-        x = mod_conv_block(x, s, dim_out)
+        x = Conv2D(filters=dim_out, kernel_size=3, padding='same', use_bias=False, kernel_initializer=init)(x)
+        x = AdaIN(x, s)
+        x = LeakyReLU(alpha=0.2)(x)
+        x = Conv2D(filters=dim_out, kernel_size=3, padding='same', use_bias=False, kernel_initializer=init)(x)
         
         return x
     
@@ -137,10 +152,11 @@ def generator(image, style):
     
     return out
 
-def encoder(image, dim_out, domains=1):
+def encoder(image, D, K=2):
     """this network can be used for both the encoders and the discriminators"""
-    #For the encoder: use dim_out = latent_size
-    #For the discriminator: use dim_out = 1
+    #For the encoder: use D = style_size
+    #For the discriminator: use D = 1
+    
     init = RandomNormal(stddev=0.02)
     bf=16
     out = Conv2D(filters=bf, kernel_size = 1, padding='same', kernel_initializer=init)(image)
@@ -156,8 +172,13 @@ def encoder(image, dim_out, domains=1):
     out = Conv2D(filters=8*bf, kernel_size=4, padding='valid', kernel_initializer=init)(out)
     out = LeakyReLU(0.2)(out)
     out = Flatten()(out)
-    out = Dense(dim_out*domains)(out)
-    return out
+    
+    outs = []
+    for domain in range(K):
+        domain_out = Dense(D)(out)
+        outs.append(domain_out)
+        
+    return outs
     
     
     

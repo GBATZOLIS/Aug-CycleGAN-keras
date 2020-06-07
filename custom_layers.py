@@ -6,7 +6,7 @@ class AdaInstanceNormalization(Layer):
     def __init__(self, 
              axis=-1,
              momentum=0.99,
-             epsilon=1e-3,
+             epsilon=1e-6,
              center=True,
              scale=True,
              **kwargs):
@@ -40,11 +40,12 @@ class AdaInstanceNormalization(Layer):
             del reduction_axes[self.axis]
 
         del reduction_axes[0]
+        
         mean = K.mean(inputs[0], reduction_axes, keepdims=True)
         stddev = K.std(inputs[0], reduction_axes, keepdims=True) + self.epsilon
         normed = (inputs[0] - mean) / stddev
 
-        return normed * gamma + beta
+        return normed * (1 + gamma) + beta
     
     def get_config(self):
         config = {

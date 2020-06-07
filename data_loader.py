@@ -16,6 +16,11 @@ class DataLoader():
         self.img_res = img_res
         #self.main_path = main_path
         
+        self.trainA = glob('data/%s%s/*.jpg' % ('train', 'A'))
+        self.trainB = glob('data/%s%s/*.jpg' % ('train', 'B'))
+        self.testA = glob('data/%s%s/*.jpg' % ('test', 'A'))
+        self.testB = glob('data/%s%s/*.jpg' % ('test', 'B'))
+        
     
     def get_random_patch(self, img, patch_dimension):
         if img.shape[0]==patch_dimension[0] and img.shape[1]==patch_dimension[1]:
@@ -39,14 +44,24 @@ class DataLoader():
             return img[x_index:x_index+patch_dimension[0], y_index:y_index+patch_dimension[1], :]
         
     def load_data(self, batch_size, dataset='test', domain='A'):
-        paths = glob('data/%s%s/*.jpg' % (dataset, domain))
-        paths = np.random.choice(paths, batch_size, replace=False)
+        if dataset=='train' and domain=='A':
+            paths = np.random.choice(self.trainA, batch_size, replace=False)
+        elif dataset=='train' and domain=='B':
+            paths = np.random.choice(self.trainB, batch_size, replace=False)
+        elif dataset=='test' and domain=='A':
+            paths = np.random.choice(self.testA, batch_size, replace=False)
+        elif dataset=='test' and domain=='B':
+            paths = np.random.choice(self.testB, batch_size, replace=False)
+        else:
+            return Exception('Incomptatible dataset or domain name')
+        
         imgs = []
         for path in paths:
             img = self.imread(path)
             imgs.append(img)
         
         imgs = np.array(imgs)/255
+        
         return imgs
     
     def load_paired_data(self, batch_size=None, is_testing=True):
