@@ -259,7 +259,7 @@ class StarGANv2(object):
         
         try:
             #create a dynamic evaluator object
-            dynamic_evaluator = evaluator(self.img_shape, self.latent_shape)
+            #dynamic_evaluator = evaluator(self.img_shape, self.latent_shape)
             
             for it in iterations:
                 y = np.random.randint(2)
@@ -340,5 +340,5 @@ class StarGANv2(object):
                 
             
 # def __init__(self, img_shape, latent_size, style_size, domains, resume=False):           
-model = StarGANv2((128,128,3), latent_size=16, style_size=64, domains=2, resume=False)
+model = StarGANv2((256,256,3), latent_size=16, style_size=64, domains=2, resume=False)
 model.train(epochs=100, batch_size = 1)
