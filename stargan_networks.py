@@ -27,7 +27,7 @@ def E(inp_shape, style_size, domains):
 
 def D(inp_shape, domains):
     x = Input(inp_shape)
-    outputs = encoder(x, D=1, K=domains)
+    outputs = encoder(x, D=1, K=domains, discriminator_use=True)
     model = Model(inputs=x, outputs=outputs, name='Discriminator')
     return model
 

@@ -197,7 +197,7 @@ def mapping_network(z, D, K):
     return outputs
         
     
-def encoder(image, D, K=2):
+def encoder(image, D, K=2, discriminator_use=False):
     """this network can be used for both the encoders and the discriminators"""
     #D: number of dimensions of the style code
     # : - For the encoder: use D = style_size
@@ -224,7 +224,11 @@ def encoder(image, D, K=2):
     
     outs = []
     for domain in range(K):
-        domain_out = Dense(D, kernel_initializer=init)(out)
+        if disc==True:
+            domain_out = Dense(D, activation='sigmoid', kernel_initializer=init)(out)
+        else:
+            domain_out = Dense(D, kernel_initializer=init)(out)
+        
         outs.append(domain_out)
         
     return outs
