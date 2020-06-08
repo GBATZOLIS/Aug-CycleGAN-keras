@@ -186,21 +186,21 @@ class StarGANv2(object):
             return output
         
         def L_sty(s_curl, s_curl_rec):
-            output = tf.reduce_mean(tf.math.norm(s_curl - s_curl_rec, ord=1, axis=1))
+            output = tf.reduce_mean(tf.norm(s_curl - s_curl_rec, ord=1, axis=1))
             return output
         
         def L_ds(x_curl, x_curl_2):
-            output = tf.reduce_sum(tf.math.norm(x_curl - x_curl_2, ord=1, axis=[1,2,3]))
+            output = tf.reduce_sum(tf.norm(x_curl - x_curl_2, ord=1, axis=[-3,-1]))
             return ouput
         
         def L_cyc(x, cycle_cons):
-            output = tf.reduce_mean(tf.math.norm(x - cycle_cons, ord=1, axis=[1,2,3]))
+            output = tf.reduce_mean(tf.norm(x - cycle_cons, ord=1, axis=[-3,-1]))
         
-        z = tf.random.normal(shape = (x.shape[0], 16))
+        z = tf.random.normal(shape = (x.shape[0], self.latent_size))
         y_curl = tf.squeeze(tf.random.categorical(tf.math.log(0.5*np.ones((1,2))), 1)) 
         y_curl = K.get_value(y_curl)
         
-        z_2 = tf.random.normal(shape = (x.shape[0], 16))
+        z_2 = tf.random.normal(shape = (x.shape[0], self.latent_size))
         
         with tf.GradientTape(persistent=True) as tape:
             #Mappings
@@ -261,7 +261,7 @@ class StarGANv2(object):
             #create a dynamic evaluator object
             #dynamic_evaluator = evaluator(self.img_shape, self.latent_shape)
             iterations=300000
-            for it in iterations:
+            for it in range(iterations):
                 y = np.random.randint(2)
                 if y==0:
                     x = self.data_loader.load_data(batch_size=batch_size, dataset='train', domain='A')
