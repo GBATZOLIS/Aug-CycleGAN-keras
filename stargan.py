@@ -279,7 +279,11 @@ class StarGANv2(object):
                     L_ds = self.train_info['losses']['L_ds'][-1]
                     L_cyc = self.train_info['losses']['L_cyc'][-1]
                     
-                    report = '[%d/%d]  [%s:%.3f  %s:%.3f  %s:%.3f  %s:%.3f]' % (it, iterations, L_adv, L_sty, L_ds, L_cyc)
+                    report = '[%d/%d]  [%s:%.3f  %s:%.3f  %s:%.3f  %s:%.3f]' % (it, iterations,
+                                                                                'L_adv', L_adv, 
+                                                                                'L_sty', L_sty, 
+                                                                                'L_ds', L_ds, 
+                                                                                'L_cyc', L_cyc)
                     print(report)
                 
                 """
