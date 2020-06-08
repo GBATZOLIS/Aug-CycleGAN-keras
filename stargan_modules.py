@@ -224,7 +224,7 @@ def encoder(image, D, K=2, discriminator_use=False):
     
     outs = []
     for domain in range(K):
-        if disc==True:
+        if discriminator_use:
             domain_out = Dense(D, activation='sigmoid', kernel_initializer=init)(out)
         else:
             domain_out = Dense(D, kernel_initializer=init)(out)
