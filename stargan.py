@@ -260,7 +260,7 @@ class StarGANv2(object):
         try:
             #create a dynamic evaluator object
             #dynamic_evaluator = evaluator(self.img_shape, self.latent_shape)
-            
+            iterations=300000
             for it in iterations:
                 y = np.random.randint(2)
                 if y==0:
