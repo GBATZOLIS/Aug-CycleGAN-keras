@@ -191,10 +191,11 @@ class StarGANv2(object):
         
         def L_ds(x_curl, x_curl_2):
             output = tf.reduce_sum(tf.norm(x_curl - x_curl_2, ord=1, axis=[-3,-1]))
-            return ouput
+            return output
         
         def L_cyc(x, cycle_cons):
             output = tf.reduce_mean(tf.norm(x - cycle_cons, ord=1, axis=[-3,-1]))
+            return output
         
         z = tf.random.normal(shape = (x.shape[0], self.latent_size))
         y_curl = tf.squeeze(tf.random.categorical(tf.math.log(0.5*np.ones((1,2))), 1)) 
