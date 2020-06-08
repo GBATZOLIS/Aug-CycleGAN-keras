@@ -99,7 +99,7 @@ class StarGANv2(object):
         
         #Weights of the losses of the objective
         self.l_sty = 1
-        self.l_ds = 1
+        self.l_ds = 0
         self.l_cyc = 1
         
         #instantiate the LPIPS loss object
@@ -252,7 +252,7 @@ class StarGANv2(object):
         self.train_info['losses']['L_ds'].append(Lds)
         self.train_info['losses']['L_cyc'].append(Lcyc)
         
-    def train(self, epochs, batch_size=10):
+    def train(self, iterations=3*10**5, batch_size=1):
         start_time = datetime.datetime.now()
         def chop_microseconds(delta):
             #utility to help avoid printing the microseconds
@@ -261,7 +261,6 @@ class StarGANv2(object):
         try:
             #create a dynamic evaluator object
             #dynamic_evaluator = evaluator(self.img_shape, self.latent_shape)
-            iterations=300000
             for it in range(iterations):
                 y = np.random.randint(2)
                 if y==0:
@@ -346,4 +345,4 @@ class StarGANv2(object):
             
 # def __init__(self, img_shape, latent_size, style_size, domains, resume=False):           
 model = StarGANv2((256,256,3), latent_size=16, style_size=64, domains=2, resume=False)
-model.train(epochs=100, batch_size = 1)
+model.train(batch_size = 2)
