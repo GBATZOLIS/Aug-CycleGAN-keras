@@ -14,25 +14,25 @@ from stargan_modules import *
 
 def G(inp_shape, style_size):
     x = Input(inp_shape)
-    s = Input(style_size)
-    output = generator(image, style)
+    s = Input((style_size,))
+    output = generator(x, s)
     model = Model(inputs = [x, s], outputs = output, name='Generator')
     return model
 
-def E(inp_shape, style_size):
+def E(inp_shape, style_size, domains):
     x = Input(inp_shape)
-    outputs = encoder(x, D=style_size, K=2)
+    outputs = encoder(x, D=style_size, K=domains)
     model = Model(inputs=x, outputs=outputs, name='Encoder')
     return model
 
-def D(inp_shape):
+def D(inp_shape, domains):
     x = Input(inp_shape)
-    output = encoder(x, D=1, K=2)
+    outputs = encoder(x, D=1, K=domains)
     model = Model(inputs=x, outputs=outputs, name='Discriminator')
     return model
 
-def F(latent_size):
-    z = Input(latent_size)
-    s_outputs = mapping_network(z) #K output branches - one style code for each domain
+def F(latent_size, style_size, domains):
+    z = Input((latent_size,))
+    s_outputs = mapping_network(z, D=style_size, K=domains) #K output branches - one style code for each domain
     model = Model(inputs=z, outputs = s_outputs, name = 'Mapping Network')
     return model

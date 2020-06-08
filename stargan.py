@@ -30,7 +30,7 @@ K = tf.keras.backend
 import matplotlib.pyplot as plt
 
 
-from stargan_modules import *
+from stargan_networks import G,E,D,F
 
   
 def discriminator_loss(real, generated):
@@ -44,10 +44,12 @@ def gen_loss(validity):
 def L1_loss(image1, image2):
     return tf.reduce_mean(tf.abs(image1 - image2))
         
-class AugCycleGAN(object):
-    def __init__(self, img_shape, latent_shape, resume=False):
+class StarGANv2(object):
+    def __init__(self, img_shape, latent_size, style_size, domains, resume=False):
         self.img_shape = img_shape
-        self.latent_shape = latent_shape
+        self.latent_size = latent_size
+        self.style_size = latent_size
+        self.domains = domains
         
         #--------------log settings---------------------
         self.train_info={}
@@ -104,10 +106,10 @@ class AugCycleGAN(object):
         self.lpips = lpips(self.img_shape)
         self.lpips.create_model()
         
-        self.G = generator()
-        self.E = encoder()
-        self.D = discriminator()
-        self.F = mapping_network() #F has two output branches reflecting the two different domains
+        self.G = G(self.img_shape, self.style_size)
+        self.E = E(self.img_shape, self.style_size, self.domains)
+        self.D = D(self.img_shape, self.domains)
+        self.F = F(self.latent_size, self.style_size, self.domains) #F has two output branches reflecting the two different domains
             
         if resume==True:
             self.G.load_weights(glob('models/G/*.h5')[-1])
@@ -337,6 +339,6 @@ class AugCycleGAN(object):
             
                 
             
-            
-model = AugCycleGAN((256,256,3), (1,1,32), resume=False)
-model.train(epochs=100, batch_size = 10)
+# def __init__(self, img_shape, latent_size, style_size, domains, resume=False):           
+model = StarGANv2((128,128,3), latent_size=16, style_size=64, domains=2, resume=False)
+model.train(epochs=100, batch_size = 1)

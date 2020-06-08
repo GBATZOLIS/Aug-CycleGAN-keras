@@ -14,12 +14,12 @@ from custom_layers import *
 from conv_mod import *
 import math
 
-def res_block(image, dim_in, dim_out, normalize=False, downsample=False):
+def ResBlock(image, dim_in, dim_out, normalize=False, downsample=False):
     learned_sc = dim_in != dim_out
     
     def shortcut(x):
         if learned_sc:
-            init = tf.keras.initializers.HeUniform()
+            init = tf.keras.initializers.he_uniform()
             x = Conv2D(filters=dim_out, kernel_size = 1, padding='same', use_bias=False, kernel_initializer=init)(x)
         
         if downsample:
@@ -28,7 +28,7 @@ def res_block(image, dim_in, dim_out, normalize=False, downsample=False):
         return x
     
     def residual(x):
-        init = tf.keras.initializers.HeUniform()
+        init = tf.keras.initializers.he_uniform()
         
         if normalize:
             x = InstanceNormalization(axis=-1)(x)
@@ -58,21 +58,22 @@ def res_block(image, dim_in, dim_out, normalize=False, downsample=False):
 
 
 def AdaIN(image, style):
+    init = tf.keras.initializers.he_uniform()
     
     num_features = image.shape[-1]
     
-    gamma = Dense(num_features)(style)
-    gamma = Reshape(shape=(gamma.shape[0], 1, 1, gamma.shape[1]))(gamma)
+    gamma = Dense(num_features, kernel_initializer = init)(style)
+    gamma = Reshape(target_shape=(1, 1, -1))(gamma)
     
-    beta = Dense(num_features)(style)
-    beta = Reshape(shape=(beta.shape[0], 1, 1, beta.shape[1]))(beta)
+    beta = Dense(num_features, kernel_initializer = init)(style)
+    beta = Reshape(target_shape=(1, 1, -1))(beta)
     
     image = AdaInstanceNormalization()([image, beta, gamma]) #scale is initialised at 1
     
     return image
 
     
-def AdaResBlock(image, style, dim_in, dim_out, w_hpf=0, upsample=False):
+def AdaResBlock(image, style, dim_in, dim_out, _shortcut=True, upsample=False):
     learned_sc = dim_in != dim_out
     
     def shortcut(x):
@@ -80,13 +81,13 @@ def AdaResBlock(image, style, dim_in, dim_out, w_hpf=0, upsample=False):
             x = UpSampling2D(size=(2, 2), interpolation='nearest')(x)
         
         if learned_sc:
-            init = tf.keras.initializers.HeUniform()
+            init = tf.keras.initializers.he_uniform()
             x = Conv2D(filters=dim_out, kernel_size = 1, padding='same', use_bias=False, kernel_initializer=init)(x)
         
         return x
     
     def residual(x, s):
-        init = tf.keras.initializers.HeUniform()
+        init = tf.keras.initializers.he_uniform()
         
         x = AdaIN(x, s)
         x = LeakyReLU(alpha=0.2)(x)
@@ -102,7 +103,7 @@ def AdaResBlock(image, style, dim_in, dim_out, w_hpf=0, upsample=False):
         return x
     
     out = residual(image, style)
-    if w_hpf==0:
+    if _shortcut:
         short = shortcut(image)
         
         out = Add()([out, short])
@@ -110,63 +111,111 @@ def AdaResBlock(image, style, dim_in, dim_out, w_hpf=0, upsample=False):
     
     return out
 
-def generator(image, style):
-    def add_block(image1, image2):
-        image = Add()([image1, image2])
-        image = Lambda(lambda x: x/math.sqrt(2), output_shape=lambda x:x)(image)
-        return image
+def generator(image, style):    
+    init = tf.keras.initializers.he_uniform()
     
-    init = RandomNormal(stddev=0.02) 
-    bf=16
+    bf=32
+    
+    #------------------------------------------------------------------------------------
     out1 = Conv2D(filters=bf, kernel_size = 1, padding='same', kernel_initializer=init)(image)
-    #-----------------------------------------------------------------------------------
-    out2 = res_block(out1, dim_in = bf, dim_out = 2*bf, normalize=False, downsample=True)
-    out3 = res_block(out2, dim_in = 2*bf, dim_out = 4*bf, normalize=False, downsample=True)
-    out4 = res_block(out3, dim_in = 4*bf, dim_out = 8*bf, normalize=False, downsample=True)
-    out = res_block(out4, dim_in = 8*bf, dim_out = 8*bf, normalize=False, downsample=True)
-    #---------------------------------------------------------------------------------
-    out = res_block(out, dim_in = 8*bf, dim_out = 8*bf, normalize=False, downsample=False)
-    out = res_block(out, dim_in = 8*bf, dim_out = 8*bf, normalize=False, downsample=False)
-    out = mod_res_block(out, style, dim_in=8*bf, dim_out=8*bf, upsample=False)
-    out = mod_res_block(out, style, dim_in=8*bf, dim_out=8*bf, upsample=False)
+    out1 = ResBlock(out1, dim_in = bf, dim_out = bf, normalize=True, downsample=False)
+    out1_forward, out1_skip = tf.split(out1, num_or_size_splits=2, axis=-1) #channel splitting
+    
+    #out1_forward channels = bf/2
+    #-------------------------------------------------------------------------------------
+    
+    """downsampling"""
+    
     #----------------------------------------------------------------------------------
-    out5 = mod_res_block(out, style, dim_in=8*bf, dim_out=8*bf, w_hpf=1, upsample=True)
-    out5 = add_block(out4, out5)
-    out6 = mod_res_block(out5, style, dim_in=8*bf, dim_out=4*bf, w_hpf=1, upsample=True)
-    out6 = add_block(out3, out6)
-    out7 = mod_res_block(out6, style, dim_in=4*bf, dim_out=2*bf, w_hpf=1, upsample=True)
-    out7 = add_block(out2, out7)
-    out8 = mod_res_block(out7, style, dim_in=2*bf, dim_out=bf, w_hpf=1, upsample=True)
-    #--------------------------------------------------------------------------------
-    #out8 = mod_res_block(out8, style, dim_in=bf, dim_out=bf, w_hpf=0, upsample=False)
+    out2 = ResBlock(out1_forward, dim_in = bf//2, dim_out = 2*bf, normalize=True, downsample=True)
+    out2 = ResBlock(out2, dim_in = 2*bf, dim_out = 2*bf, normalize=True, downsample=False)
+    out2_forward, out2_skip = tf.split(out2, num_or_size_splits=2, axis=-1)
+    #out2_forward channels = bf
+    #-------------------------------------------------------------------------------------
+    out3 = ResBlock(out2_forward, dim_in = bf, dim_out = 4*bf, normalize=True, downsample=True)
+    out3 = ResBlock(out3, dim_in = 4*bf, dim_out = 4*bf, normalize=True, downsample=False)
+    out3_forward, out3_skip = tf.split(out3, num_or_size_splits=2, axis=-1)
+    #out3_forward channels = 2*bf
+    #-------------------------------------------------------------------------------
+    out4 = ResBlock(out3_forward, dim_in = 2*bf, dim_out = 8*bf, normalize=True, downsample=True)
     
-    out9 = add_block(out8, out1)
-    
-    out9 = mod_res_block(out9, style, dim_in=bf, dim_out=bf, w_hpf=0, upsample=False)
-    out9 = mod_res_block(out9, style, dim_in=bf, dim_out=bf, w_hpf=0, upsample=False)
-    out9 = mod_res_block(out9, style, dim_in=bf, dim_out=bf, w_hpf=0, upsample=False)
-    
-    
-    
-    out = Conv2D(filters=3, kernel_size=1, padding='same', kernel_initializer=init)(out9)
-    
-    return out
+    """bottleneck"""
+    out4 = ResBlock(out4, dim_in = 8*bf, dim_out = 8*bf, normalize=True, downsample=False)
+    out4 = ResBlock(out4, dim_in = 8*bf, dim_out = 8*bf, normalize=True, downsample=False)
+    out4 = AdaResBlock(out4, style, dim_in = 8*bf, dim_out = 8*bf, _shortcut=True, upsample=False)
+    out4 = AdaResBlock(out4, style, dim_in = 8*bf, dim_out = 8*bf, _shortcut=True, upsample=False)
 
+    """upsampling"""
+    out5_forward = AdaResBlock(out4, style, dim_in = 8*bf, dim_out = 2*bf, _shortcut=False, upsample=True)
+    out5_concat = Concatenate(axis=-1)([out5_forward, out3_skip])
+    #out5_concat channels = 4*bf
+    out5 = AdaResBlock(out5_concat, style, dim_in = 4*bf, dim_out = 4*bf, _shortcut=False, upsample=False)
+    
+    #----------------------------------------------------------------
+    
+    out6_forward = AdaResBlock(out5, style, dim_in = 4*bf, dim_out = bf, _shortcut=False, upsample=True)
+    out6_concat = Concatenate(axis=-1)([out6_forward, out2_skip])
+    #out6_concat channels = 2*bf
+    out6 = AdaResBlock(out6_concat, style, dim_in = 2*bf, dim_out = 2*bf, _shortcut=False, upsample=False)
+    
+    #----------------------------------------------------------------
+    out7_forward = AdaResBlock(out6, style, dim_in = 2*bf, dim_out = bf//2, _shortcut=False, upsample=True)
+    out7_concat = Concatenate(axis=-1)([out7_forward, out1_skip])
+    #out7_concat channels = bf
+    out7 = AdaResBlock(out7_concat, style, dim_in = bf, dim_out = bf, _shortcut=False, upsample=False)
+    
+    output = Conv2D(filters = 3, kernel_size = 1, padding = 'same', kernel_initializer = init)(out7)
+
+    return output
+
+def mapping_network(z, D, K):
+    #D: number of dimensions of the style code
+    #K: number of domains - number of output branches
+    
+    def dense_block(inp, out_nodes, act=True):
+        init = tf.keras.initializers.he_uniform()
+        out = Dense(out_nodes, kernel_initializer = init)(inp)
+        if act:
+            out = LeakyReLU(alpha=0.2)(out)
+        return out
+    
+    #shared part
+    shared = dense_block(z, 512)
+    shared = dense_block(shared, 512)
+    shared = dense_block(shared, 512)
+    shared = dense_block(shared, 512)
+    
+    #K specific output branches
+    outputs=[]
+    for i in range(K):
+        branch_output = dense_block(shared, 512)
+        branch_output = dense_block(branch_output, 512)
+        branch_output = dense_block(branch_output, 512)
+        branch_output = dense_block(branch_output, D)
+        outputs.append(branch_output)
+    
+    return outputs
+        
+    
 def encoder(image, D, K=2):
     """this network can be used for both the encoders and the discriminators"""
-    #For the encoder: use D = style_size
-    #For the discriminator: use D = 1
+    #D: number of dimensions of the style code
+    # : - For the encoder: use D = style_size
+    # : - For the discriminator: use D = 1
     
-    init = RandomNormal(stddev=0.02)
-    bf=16
-    out = Conv2D(filters=bf, kernel_size = 1, padding='same', kernel_initializer=init)(image)
+    #K: number of domains - number of output branches
+    
+    
+    init = tf.keras.initializers.he_uniform()
+    bf = 32 #bf stands for base filter
+    out = Conv2D(filters = bf, kernel_size = 1, padding = 'same', kernel_initializer = init)(image)
     #------------------------------------------------------------------------------------------------
-    out = res_block(out, dim_in=bf, dim_out=2*bf, normalize=True, downsample=True)
-    out = res_block(out, dim_in=2*bf, dim_out=4*bf, normalize=True, downsample=True)
-    out = res_block(out, dim_in=4*bf, dim_out=8*bf, normalize=True, downsample=True)
-    out = res_block(out, dim_in=8*bf, dim_out=8*bf, normalize=True, downsample=True)
-    out = res_block(out, dim_in=8*bf, dim_out=8*bf, normalize=True, downsample=True)
-    out = res_block(out, dim_in=8*bf, dim_out=8*bf, normalize=True, downsample=True)
+    out = ResBlock(out, dim_in=bf, dim_out=2*bf, normalize=False, downsample=True)
+    out = ResBlock(out, dim_in=2*bf, dim_out=4*bf, normalize=False, downsample=True)
+    out = ResBlock(out, dim_in=4*bf, dim_out=8*bf, normalize=False, downsample=True)
+    out = ResBlock(out, dim_in=8*bf, dim_out=8*bf, normalize=False, downsample=True)
+    out = ResBlock(out, dim_in=8*bf, dim_out=8*bf, normalize=False, downsample=True)
+    out = ResBlock(out, dim_in=8*bf, dim_out=8*bf, normalize=False, downsample=True)
     #--------------------------------------------------------------------------------------------
     out = LeakyReLU(0.2)(out)
     out = Conv2D(filters=8*bf, kernel_size=4, padding='valid', kernel_initializer=init)(out)
@@ -175,15 +224,32 @@ def encoder(image, D, K=2):
     
     outs = []
     for domain in range(K):
-        domain_out = Dense(D)(out)
+        domain_out = Dense(D, kernel_initializer=init)(out)
         outs.append(domain_out)
         
     return outs
+
+
+"""
+image = Input((256,256,3))
+outs = encoder(image, D=64, K=2)
+model = Model(inputs = image, outputs = outs, name = 'Encoder')
+print(model.summary())
+"""
+
+
+"""
+z=Input((16,))
+out_K = mapping_network(z = z, D = 64, K=2)  
+model = Model(inputs=z, outputs=out_K, name='mapping network')
+print(model.summary())
+"""
     
-    
-    
-    
-#image = Input((256,256,3))
-#y = encoder(image, dim_out=64)
-#model = Model(inputs=image, outputs=y)
-#print(model.summary())
+
+"""
+image = Input((256,256,3))
+style = Input((64,))
+output = generator(image, style)
+model = Model(inputs=[image, style], outputs=output, name='gen')
+print(model.summary())
+"""
