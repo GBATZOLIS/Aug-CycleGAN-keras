@@ -117,7 +117,13 @@ class StarGANv2(object):
             self.D.load_weights(glob('models/D/*.h5')[-1])
             self.F.load_weights(glob('models/F/*.h5')[-1])
         
+        #set the optimizers of all models
+        self.G_opt = self.E_opt = self.D_opt  = Adam(lr=10**(-4), beta_1=0, beta_2 = 0.99)
+        self.F_opt = Adam(lr=10**(-6), beta_1=0, beta_2 = 0.99)
+        
+        """
         #For evaluation we use exponential moving average of all modules except D
+        
         self.G_EMA = clone_model(self.G)
         self.G_EMA.set_weights(self.G.get_weights())
         #---------------------
@@ -127,11 +133,7 @@ class StarGANv2(object):
         self.F_EMA = clone_model(self.F)
         self.F_EMA.set_weights(self.F.get_weights())
         #------------------------------------------------------------------------------------
-        
-        
-        #set the optimizers of all models
-        self.G_opt = self.E_opt = self.D_opt  = Adam(lr=10**(-4), beta_1=0, beta_2 = 0.99)
-        self.F_opt = Adam(lr=10**(-6), beta_1=0, beta_2 = 0.99)
+        """
     
     def save_models(self,epoch):
         
@@ -345,4 +347,4 @@ class StarGANv2(object):
             
 # def __init__(self, img_shape, latent_size, style_size, domains, resume=False):           
 model = StarGANv2((256,256,3), latent_size=16, style_size=64, domains=2, resume=False)
-model.train(batch_size = 2)
+model.train(batch_size = 5)
