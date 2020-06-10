@@ -19,7 +19,6 @@ from tensorflow.keras.layers import Input
 from tensorflow.keras.models import load_model
 from modules import blur
 from networks import G_AB, G_BA, E_A, E_B, D_A, D_B, D_Za, D_Zb, N_map
-from evaluator import evaluator
 from tensorflow.keras.losses import mse
 import tensorflow as tf
 from lpips import lpips
@@ -31,6 +30,7 @@ import matplotlib.pyplot as plt
 
 
 from stargan_networks import G,E,D,F
+from stargan_evaluator import evaluator
 
   
 def discriminator_loss(real, generated):
@@ -262,7 +262,7 @@ class StarGANv2(object):
         
         try:
             #create a dynamic evaluator object
-            #dynamic_evaluator = evaluator(self.img_shape, self.latent_shape)
+            dynamic_evaluator = evaluator(self.img_shape, self.latent_size, self.domains)
             for it in range(iterations):
                 y = np.random.randint(2)
                 if y==0:
@@ -287,17 +287,18 @@ class StarGANv2(object):
                                                                                 'L_cyc', L_cyc)
                     print(report)
                 
+                if it % 100 == 50:
+                    #Create visual results for manual inspection
+                    dynamic_evaluator.F = self.F
+                    dynamic_evaluator.G = self.G
+                    dynamic_evaluator.visual_performance(training_point = it)
+                    
                 """
                 if it % 200 = 100:
                     #evaluation based on FID and LPIPS
                     #I may need to introduce a measure which captures LPIPS between input and ouput
                     #This metric will check whether the identity of the person remains the same
                 """
-                    
-
-
-
-
 
             
         except KeyboardInterrupt:
