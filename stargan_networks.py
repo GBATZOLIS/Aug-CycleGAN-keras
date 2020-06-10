@@ -34,5 +34,5 @@ def D(inp_shape, domains):
 def F(latent_size, style_size, domains):
     z = Input((latent_size,))
     s_outputs = mapping_network(z, D=style_size, K=domains) #K output branches - one style code for each domain
-    model = Model(inputs=z, outputs = s_outputs, name = 'Mapping Network')
+    model = Model(inputs=z, outputs = s_outputs, name = 'Mapping_Network')
     return model

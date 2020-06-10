@@ -287,7 +287,7 @@ class StarGANv2(object):
                                                                                 'L_cyc', L_cyc)
                     print(report)
                 
-                if it % 100 == 50:
+                if it % 100 == 2:
                     #Create visual results for manual inspection
                     dynamic_evaluator.F = self.F
                     dynamic_evaluator.G = self.G
@@ -348,4 +348,4 @@ class StarGANv2(object):
             
 # def __init__(self, img_shape, latent_size, style_size, domains, resume=False):           
 model = StarGANv2((256,256,3), latent_size=16, style_size=64, domains=2, resume=False)
-model.train(batch_size = 5)
+model.train(batch_size = 3)
