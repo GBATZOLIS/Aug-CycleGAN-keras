@@ -183,8 +183,13 @@ class StarGANv2(object):
     
     
     def training_cycle(self, x, y):
-        def L_adv(D_true, D_fake):
-            output = tf.reduce_mean(tf.math.log(D_true)) + tf.reduce_mean(tf.math.log(1-D_fake))
+        def L_adv_disc(D_true, D_fake):
+            #output = tf.reduce_mean(tf.math.log(D_true)) + tf.reduce_mean(tf.math.log(1-D_fake))
+            output = 0.5*(tf.reduce_mean(tf.math.square(tf.ones_like(D_true)-D_true))+tf.reduce_mean(tf.math.square(tf.zeros_like(D_fake)-D_fake)))
+            return output
+        
+        def L_adv_gen(D_fake):
+            output = tf.reduce_mean(tf.math.square(tf.ones_like(D_fake)-D_fake))
             return output
         
         def L_sty(s_curl, s_curl_rec):
@@ -192,7 +197,7 @@ class StarGANv2(object):
             return output
         
         def L_ds(x_curl, x_curl_2):
-            output = tf.reduce_sum(tf.math.abs(x_curl - x_curl_2))
+            output = tf.reduce_mean(tf.math.abs(x_curl - x_curl_2))
             return output
         
         def L_cyc(x, cycle_cons):
@@ -226,14 +231,15 @@ class StarGANv2(object):
             x_rec = self.G([x_curl, s_hat], training=True)
             
             #Computation of losses
-            Ladv = L_adv(D_true, D_fake)
+            Ladv_disc = L_adv_disc(D_true, D_fake)
+            Ladv_gen = L_adv_gen(D_fake)
             Lsty = L_sty(s_curl, s_curl_rec)
             Lds = L_ds(x_curl, x_curl_2)
             Lcyc = L_cyc(x, x_rec)
             
-            objective = Ladv + self.l_sty*Lsty -1*self.l_ds*Lds + self.l_cyc*Lcyc
-            D_loss = -1*objective
-            GFE_loss = objective
+            gen_objective = Ladv_gen + self.l_sty*Lsty -1*self.l_ds*Lds + self.l_cyc*Lcyc
+            D_loss = Ladv_disc
+            GFE_loss = gen_objective
         
         
         D_grads = tape.gradient(D_loss, self.D.trainable_variables)
