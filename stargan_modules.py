@@ -6,7 +6,7 @@ Created on Thu May 14 12:29:13 2020
 """
 
 #StarGAN modules
-
+import tensorflow as tf
 from tensorflow.keras.layers import *
 from tensorflow.keras.initializers import *
 from tensorflow.keras.models import Model
@@ -210,12 +210,12 @@ def encoder(image, D, K=2, discriminator_use=False):
     bf = 32 #bf stands for base filter
     out = Conv2D(filters = bf, kernel_size = 1, padding = 'same', kernel_initializer = init)(image)
     #------------------------------------------------------------------------------------------------
-    out = ResBlock(out, dim_in=bf, dim_out=2*bf, normalize=False, downsample=True)
-    out = ResBlock(out, dim_in=2*bf, dim_out=4*bf, normalize=False, downsample=True)
-    out = ResBlock(out, dim_in=4*bf, dim_out=8*bf, normalize=False, downsample=True)
-    out = ResBlock(out, dim_in=8*bf, dim_out=8*bf, normalize=False, downsample=True)
-    out = ResBlock(out, dim_in=8*bf, dim_out=8*bf, normalize=False, downsample=True)
-    out = ResBlock(out, dim_in=8*bf, dim_out=8*bf, normalize=False, downsample=True)
+    out = ResBlock(out, dim_in=bf, dim_out=2*bf, normalize=True, downsample=True)
+    out = ResBlock(out, dim_in=2*bf, dim_out=4*bf, normalize=True, downsample=True)
+    out = ResBlock(out, dim_in=4*bf, dim_out=8*bf, normalize=True, downsample=True)
+    out = ResBlock(out, dim_in=8*bf, dim_out=8*bf, normalize=True, downsample=True)
+    out = ResBlock(out, dim_in=8*bf, dim_out=8*bf, normalize=True, downsample=True)
+    out = ResBlock(out, dim_in=8*bf, dim_out=8*bf, normalize=True, downsample=True)
     #--------------------------------------------------------------------------------------------
     out = LeakyReLU(0.2)(out)
     out = Conv2D(filters=8*bf, kernel_size=4, padding='valid', kernel_initializer=init)(out)
