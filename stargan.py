@@ -95,7 +95,7 @@ class StarGANv2(object):
         self.pl_mean_G_BA = 0.
         
         #Exponential moving average parameters
-        self.beta=0.99
+        self.beta=0.999
         
         #Weights of the losses of the objective
         self.l_sty = 1
@@ -188,15 +188,15 @@ class StarGANv2(object):
             return output
         
         def L_sty(s_curl, s_curl_rec):
-            output = tf.reduce_mean(tf.norm(s_curl - s_curl_rec, ord=1, axis=1))
+            output = tf.reduce_mean(tf.norm(s_curl - s_curl_rec, ord=1))
             return output
         
         def L_ds(x_curl, x_curl_2):
-            output = tf.reduce_sum(tf.norm(x_curl - x_curl_2, ord=1, axis=[-3,-1]))
+            output = tf.reduce_sum(tf.norm(x_curl - x_curl_2, ord=1))
             return output
         
         def L_cyc(x, cycle_cons):
-            output = tf.reduce_mean(tf.norm(x - cycle_cons, ord=1, axis=[-3,-1]))
+            output = tf.reduce_mean(tf.norm(x - cycle_cons, ord=1))
             return output
         
         z = tf.random.normal(shape = (x.shape[0], self.latent_size))
@@ -223,13 +223,13 @@ class StarGANv2(object):
             
             #for preserving source characteristics (ID)
             s_hat = self.E(x, training=True)[y]
-            cycle_cons = self.G([x_curl, s_hat], training=True)
+            x_rec = self.G([x_curl, s_hat], training=True)
             
             #Computation of losses
             Ladv = L_adv(D_true, D_fake)
             Lsty = L_sty(s_curl, s_curl_rec)
             Lds = L_ds(x_curl, x_curl_2)
-            Lcyc = L_cyc(x, cycle_cons)
+            Lcyc = L_cyc(x, x_rec)
             
             objective = Ladv + self.l_sty*Lsty -1*self.l_ds*Lds + self.l_cyc*Lcyc
             D_loss = -1*objective
@@ -254,7 +254,7 @@ class StarGANv2(object):
         self.train_info['losses']['L_ds'].append(Lds)
         self.train_info['losses']['L_cyc'].append(Lcyc)
         
-    def train(self, iterations=3*10**5, batch_size=1):
+    def train(self, iterations=10**5, batch_size=1):
         start_time = datetime.datetime.now()
         def chop_microseconds(delta):
             #utility to help avoid printing the microseconds
@@ -280,18 +280,29 @@ class StarGANv2(object):
                     L_ds = self.train_info['losses']['L_ds'][-1]
                     L_cyc = self.train_info['losses']['L_cyc'][-1]
                     
-                    report = '[%d/%d]  [%s:%.3f  %s:%.3f  %s:%.3f  %s:%.3f]' % (it, iterations,
+                    report = '[%d/%d]  [%s:%.5f  %s:%.3f  %s:%.3f  %s:%.3f]' % (it, iterations,
                                                                                 'L_adv', L_adv, 
                                                                                 'L_sty', L_sty, 
                                                                                 'L_ds', L_ds, 
                                                                                 'L_cyc', L_cyc)
                     print(report)
                 
-                if it % 100 == 2:
+                if it % 100 == 5:
                     #Create visual results for manual inspection
                     dynamic_evaluator.F = self.F
                     dynamic_evaluator.G = self.G
                     dynamic_evaluator.visual_performance(training_point = it)
+                    
+                    #update the loss tensorboard
+                    save_path = 'progress/training_evaluation/log.png'
+                    fig, axs = plt.subplots(2, 2, figsize=(20,20))
+                    axs[0,0].plot(self.train_info['losses']['L_adv'])
+                    axs[0,1].plot(self.train_info['losses']['L_sty'])
+                    axs[1,0].plot(self.train_info['losses']['L_ds'])
+                    axs[1,1].plot(self.train_info['losses']['L_cyc'])
+                    fig.savefig(save_path, bbox_inches='tight')
+                    plt.close("all")
+                    print('Tensorboard log has been generated and save in progress/training_evaluation/')
                     
                 """
                 if it % 200 = 100:
