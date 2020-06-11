@@ -307,7 +307,10 @@ class StarGANv2(object):
                     #update the loss tensorboard
                     save_path = 'progress/training_evaluation/log.png'
                     fig, axs = plt.subplots(2, 2, figsize=(20,20))
-                    axs[0,0].plot(self.train_info['losses']['L_adv'])
+                    axs[0,0].plot(self.train_info['losses']['L_adv_gen'], label = 'gen')
+                    axs[0,0].plot(self.train_info['losses']['L_adv_disc'], label = 'disc')
+                    axs[0,0].legend()
+                    
                     axs[0,1].plot(self.train_info['losses']['L_sty'])
                     axs[1,0].plot(self.train_info['losses']['L_ds'])
                     axs[1,1].plot(self.train_info['losses']['L_cyc'])
