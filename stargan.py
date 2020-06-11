@@ -101,7 +101,7 @@ class StarGANv2(object):
         
         #Weights of the losses of the objective
         self.l_sty = 1
-        self.l_ds = 0
+        self.l_ds = 1
         self.l_cyc = 1
         
         #instantiate the LPIPS loss object
@@ -184,7 +184,7 @@ class StarGANv2(object):
         self.F_EMA.set_weights(self.F.get_weights())
     
     
-    def training_cycle(self, x, y):
+    def training_cycle(self, x, y, it, max_it):
         def L_adv_disc(D_true, D_fake):
             #output = tf.reduce_mean(tf.math.log(D_true)) + tf.reduce_mean(tf.math.log(1-D_fake))
             output = 0.5*(tf.reduce_mean(tf.math.square(tf.ones_like(D_true)-D_true))+tf.reduce_mean(tf.math.square(tf.zeros_like(D_fake)-D_fake)))
@@ -239,7 +239,7 @@ class StarGANv2(object):
             Lds = L_ds(x_curl, x_curl_2)
             Lcyc = L_cyc(x, x_rec)
             
-            gen_objective = Ladv_gen + self.l_sty*Lsty -1*self.l_ds*Lds + self.l_cyc*Lcyc
+            gen_objective = Ladv_gen + self.l_sty*Lsty -1*self.l_ds*(1-it/max_it)*Lds + self.l_cyc*Lcyc
             D_loss = Ladv_disc
             GFE_loss = gen_objective
         
@@ -281,7 +281,7 @@ class StarGANv2(object):
                 else:
                     Exception('Wrong encoding provideed for the domains')
                 
-                self.training_cycle(x,y)
+                self.training_cycle(x, y, it, iterations)
                 
                 if it % 10 == 0:
                     L_adv_disc = self.train_info['losses']['L_adv_disc'][-1]

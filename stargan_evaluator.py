@@ -34,7 +34,7 @@ class evaluator(object):
             fake_imgs_B[j] = fake_B
         
         
-        fig, axs = plt.subplots(batch_size, self.domains*num_out_imgs+1, figsize=(20,28))
+        fig, axs = plt.subplots(batch_size, self.domains*num_out_imgs+1, figsize=(28,20))
             
         for j in range(batch_size):
             for i in range(self.domains*num_out_imgs+1):
