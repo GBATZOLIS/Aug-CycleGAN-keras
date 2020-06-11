@@ -76,6 +76,13 @@ def AdaIN(image, style):
 def AdaResBlock(image, style, dim_in, dim_out, _shortcut=True, upsample=False):
     learned_sc = dim_in != dim_out
     
+    def style_block(image, noise, filters):
+        init = tf.keras.initializers.he_uniform()
+        style = Dense(image.shape[-1], kernel_initializer = init)(noise)
+        image = Conv2DMod(filters = filters, kernel_size = 3, padding = 'same', kernel_initializer = init)([image, style])
+        image = LeakyReLU(alpha=0.2)(image)
+        return image
+    
     def shortcut(x):
         if upsample:
             x = UpSampling2D(size=(2, 2), interpolation='nearest')(x)
@@ -89,15 +96,20 @@ def AdaResBlock(image, style, dim_in, dim_out, _shortcut=True, upsample=False):
     def residual(x, s):
         init = tf.keras.initializers.he_uniform()
         
-        x = AdaIN(x, s)
-        x = LeakyReLU(alpha=0.2)(x)
+        #x = AdaIN(x, s)
+        #x = LeakyReLU(alpha=0.2)(x)
+        
+        x = style_block(x, s, dim_out) #new
         
         if upsample:
             x = UpSampling2D(size=(2, 2), interpolation='nearest')(x)
         
-        x = Conv2D(filters=dim_out, kernel_size=3, padding='same', use_bias=False, kernel_initializer=init)(x)
-        x = AdaIN(x, s)
-        x = LeakyReLU(alpha=0.2)(x)
+        #x = Conv2D(filters=dim_out, kernel_size=3, padding='same', use_bias=False, kernel_initializer=init)(x)
+        #x = AdaIN(x, s)
+        #x = LeakyReLU(alpha=0.2)(x)
+        
+        x = style_block(x, s, dim_out) #new
+        
         x = Conv2D(filters=dim_out, kernel_size=3, padding='same', use_bias=False, kernel_initializer=init)(x)
         
         return x
