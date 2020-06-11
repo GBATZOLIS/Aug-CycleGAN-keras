@@ -188,15 +188,15 @@ class StarGANv2(object):
             return output
         
         def L_sty(s_curl, s_curl_rec):
-            output = tf.reduce_mean(tf.norm(s_curl - s_curl_rec, ord=1))
+            output = tf.reduce_mean(tf.math.abs(s_curl - s_curl_rec))
             return output
         
         def L_ds(x_curl, x_curl_2):
-            output = tf.reduce_sum(tf.norm(x_curl - x_curl_2, ord=1))
+            output = tf.reduce_sum(tf.math.abs(x_curl - x_curl_2))
             return output
         
         def L_cyc(x, cycle_cons):
-            output = tf.reduce_mean(tf.norm(x - cycle_cons, ord=1))
+            output = tf.reduce_mean(tf.math.abs(x - cycle_cons))
             return output
         
         z = tf.random.normal(shape = (x.shape[0], self.latent_size))
