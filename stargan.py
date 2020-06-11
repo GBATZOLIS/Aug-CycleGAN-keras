@@ -56,7 +56,9 @@ class StarGANv2(object):
         
         #-----------------LOSSES------------------------
         self.train_info['losses'] = {}
-        self.train_info['losses']['L_adv'] = []
+        self.train_info['losses']['L_adv_disc'] = []
+        self.train_info['losses']['L_adv_gen'] = []
+        #self.train_info['losses']['L_adv'] = []
         self.train_info['losses']['L_sty'] = []
         self.train_info['losses']['L_ds'] = []
         self.train_info['losses']['L_cyc'] = []
@@ -255,7 +257,8 @@ class StarGANv2(object):
         self.F_opt.apply_gradients(zip(F_grads, self.F.trainable_variables))   
         
         #Update the tensorboard values
-        self.train_info['losses']['L_adv'].append(Ladv)
+        self.train_info['losses']['L_adv_disc'].append(Ladv_disc)
+        self.train_info['losses']['L_adv_gen'].append(Ladv_gen)
         self.train_info['losses']['L_sty'].append(Lsty)
         self.train_info['losses']['L_ds'].append(Lds)
         self.train_info['losses']['L_cyc'].append(Lcyc)
@@ -281,13 +284,15 @@ class StarGANv2(object):
                 self.training_cycle(x,y)
                 
                 if it % 10 == 0:
-                    L_adv = self.train_info['losses']['L_adv'][-1]
+                    L_adv_disc = self.train_info['losses']['L_adv_disc'][-1]
+                    L_adv_gen = self.train_info['losses']['L_adv_gen'][-1]
                     L_sty = self.train_info['losses']['L_sty'][-1]
                     L_ds = self.train_info['losses']['L_ds'][-1]
                     L_cyc = self.train_info['losses']['L_cyc'][-1]
                     
-                    report = '[%d/%d]  [%s:%.5f  %s:%.3f  %s:%.3f  %s:%.3f]' % (it, iterations,
-                                                                                'L_adv', L_adv, 
+                    report = '[%d/%d]  [%s:%.5f  %s:%.5f  %s:%.3f  %s:%.3f  %s:%.3f]' % (it, iterations,
+                                                                                'L_adv_disc', L_adv_disc,
+                                                                                'L_adv_gen', L_adv_gen, 
                                                                                 'L_sty', L_sty, 
                                                                                 'L_ds', L_ds, 
                                                                                 'L_cyc', L_cyc)
