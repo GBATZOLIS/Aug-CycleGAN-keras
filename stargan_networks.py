@@ -38,5 +38,5 @@ def F(latent_size, style_size, domains):
     return model
 
 
-model = G((256,256,3), 64)
-print(model.summary())
+#model = G((256,256,3), 64)
+#print(model.summary())

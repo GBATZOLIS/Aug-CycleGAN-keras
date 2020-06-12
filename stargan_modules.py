@@ -129,7 +129,7 @@ def generator(image, style):
     
     #------------------------------------------------------------------------------------
     out1 = Conv2D(filters=bf, kernel_size = 1, padding='same', kernel_initializer=init)(image)
-    out1 = ResBlock(out1, dim_in = bf, dim_out = bf, normalize=True, downsample=False)
+    out1 = ResBlock(out1, dim_in = bf, dim_out = bf, normalize=False, downsample=False)
     out1_forward, out1_skip = tf.split(out1, num_or_size_splits=2, axis=-1) #channel splitting
     
     #out1_forward channels = bf/2
@@ -138,21 +138,21 @@ def generator(image, style):
     """downsampling"""
     
     #----------------------------------------------------------------------------------
-    out2 = ResBlock(out1_forward, dim_in = bf//2, dim_out = 2*bf, normalize=True, downsample=True)
-    out2 = ResBlock(out2, dim_in = 2*bf, dim_out = 2*bf, normalize=True, downsample=False)
+    out2 = ResBlock(out1_forward, dim_in = bf//2, dim_out = 2*bf, normalize=False, downsample=True)
+    out2 = ResBlock(out2, dim_in = 2*bf, dim_out = 2*bf, normalize=False, downsample=False)
     out2_forward, out2_skip = tf.split(out2, num_or_size_splits=2, axis=-1)
     #out2_forward channels = bf
     #-------------------------------------------------------------------------------------
-    out3 = ResBlock(out2_forward, dim_in = bf, dim_out = 4*bf, normalize=True, downsample=True)
-    out3 = ResBlock(out3, dim_in = 4*bf, dim_out = 4*bf, normalize=True, downsample=False)
+    out3 = ResBlock(out2_forward, dim_in = bf, dim_out = 4*bf, normalize=False, downsample=True)
+    out3 = ResBlock(out3, dim_in = 4*bf, dim_out = 4*bf, normalize=False, downsample=False)
     out3_forward, out3_skip = tf.split(out3, num_or_size_splits=2, axis=-1)
     #out3_forward channels = 2*bf
     #-------------------------------------------------------------------------------
-    out4 = ResBlock(out3_forward, dim_in = 2*bf, dim_out = 8*bf, normalize=True, downsample=True)
+    out4 = ResBlock(out3_forward, dim_in = 2*bf, dim_out = 8*bf, normalize=False, downsample=True)
     
     """bottleneck"""
-    out4 = ResBlock(out4, dim_in = 8*bf, dim_out = 8*bf, normalize=True, downsample=False)
-    out4 = ResBlock(out4, dim_in = 8*bf, dim_out = 8*bf, normalize=True, downsample=False)
+    out4 = ResBlock(out4, dim_in = 8*bf, dim_out = 8*bf, normalize=False, downsample=False)
+    out4 = ResBlock(out4, dim_in = 8*bf, dim_out = 8*bf, normalize=False, downsample=False)
     out4 = AdaResBlock(out4, style, dim_in = 8*bf, dim_out = 8*bf, _shortcut=True, upsample=False)
     out4 = AdaResBlock(out4, style, dim_in = 8*bf, dim_out = 8*bf, _shortcut=True, upsample=False)
 
