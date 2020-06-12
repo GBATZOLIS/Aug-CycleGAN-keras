@@ -101,7 +101,7 @@ class StarGANv2(object):
         
         #Weights of the losses of the objective
         self.l_sty = 1
-        self.l_ds = 1
+        self.l_ds = 0.1
         self.l_cyc = 1
         
         #instantiate the LPIPS loss object

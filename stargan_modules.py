@@ -107,11 +107,10 @@ def AdaResBlock(image, style, dim_in, dim_out, _shortcut=True, upsample=False):
         #x = Conv2D(filters=dim_out, kernel_size=3, padding='same', use_bias=False, kernel_initializer=init)(x)
         #x = AdaIN(x, s)
         #x = LeakyReLU(alpha=0.2)(x)
+        #x = Conv2D(filters=dim_out, kernel_size=3, padding='same', use_bias=False, kernel_initializer=init)(x)
         
         x = style_block(x, s, dim_out) #new
-        
-        x = Conv2D(filters=dim_out, kernel_size=3, padding='same', use_bias=False, kernel_initializer=init)(x)
-        
+
         return x
     
     out = residual(image, style)
@@ -175,6 +174,11 @@ def generator(image, style):
     out7_concat = Concatenate(axis=-1)([out7_forward, out1_skip])
     #out7_concat channels = bf
     out7 = AdaResBlock(out7_concat, style, dim_in = bf, dim_out = bf, _shortcut=False, upsample=False)
+    
+    out7 = AdaResBlock(out7, style, dim_in = bf, dim_out = bf, _shortcut=False, upsample=False) #new
+    out7 = AdaResBlock(out7, style, dim_in = bf, dim_out = bf, _shortcut=False, upsample=False) #new
+    #out7 = AdaResBlock(out7, style, dim_in = bf, dim_out = bf, _shortcut=True, upsample=False) #new
+    #out7 = AdaResBlock(out7, style, dim_in = bf, dim_out = bf, _shortcut=True, upsample=False) #new
     
     output = Conv2D(filters = 3, kernel_size = 1, padding = 'same', kernel_initializer = init)(out7)
 
