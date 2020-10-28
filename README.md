@@ -1,8 +1,8 @@
 # MULTI MODAL IMAGE ENHANCEMENT
 
-The Augmented CycleGAN framework was modified and trained on the DPED dataset to achieve multimodal/diverse image enhancement. 
+Our work has been based on the augmented Cycle-GAN framework. Crucial modifications were maded on the framework before it was trained on the DPED dataset to achieve multimodal/diverse image enhancement. 
 
-Below you can see visual results. The image on the left is the low quality image, while the gif on the right shows different enhanced versions of the low quality image.
+Below you can see some visual results. The image on the left is the low quality image, while the gif on the right shows different enhancements of the low quality image.
 
 
 ![Alt Text](https://github.com/GBATZOLIS/Aug-CycleGAN-keras/blob/master/progress/gif/PPL_only_gifs/790.gif)
