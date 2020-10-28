@@ -1,6 +1,6 @@
 # MULTI MODAL IMAGE ENHANCEMENT
 
-Our work has been based on the augmented Cycle-GAN framework. Crucial modifications were maded on the framework before it was trained on the DPED dataset to achieve multimodal/diverse image enhancement. 
+Our work has been based on the Augmented CycleGAN framework. Crucial modifications were maded on the framework before it was trained on the DPED dataset to achieve multimodal/diverse image enhancement. 
 
 Below you can see some visual results. The image on the left is the low quality image, while the gif on the right shows different enhancements of the low quality image.
 
